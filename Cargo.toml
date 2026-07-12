@@ -32,7 +32,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Herald — an opinionated JMAP CLI for Stalwart Mail Server"
+repository = "https://github.com/BernhardRode/herald"
 publish = false
+
+[package.metadata.dist]
+dist = true
 
 [[bin]]
 name = "herald"
@@ -60,3 +64,8 @@ dotenvy = "0.15"
 open = "5"
 rand = { workspace = true }
 bytes = "1"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
