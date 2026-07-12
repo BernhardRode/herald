@@ -477,7 +477,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "herald"
+name = "herald-jmap-cli"
 version = "0.1.1"
 dependencies = [
  "base64",
@@ -763,7 +763,8 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "jmap-base-client"
 version = "0.1.2"
-source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab12271fca95ae227ec06eed03e9257e10aa1846e6866db10b1f73d235f002e4"
 dependencies = [
  "base64",
  "bytes",
@@ -786,7 +787,8 @@ dependencies = [
 [[package]]
 name = "jmap-cid-types"
 version = "0.1.1"
-source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51085f24bd6fe031684fc9afedc453daef47d7b8d9ad7ec79378674d2b126f2c"
 dependencies = [
  "serde",
  "serde_json",
@@ -795,7 +797,8 @@ dependencies = [
 [[package]]
 name = "jmap-mail-client"
 version = "0.1.2"
-source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7906ca2fe18c52ce7c18f135b26e9e03c6d086c993f708eb01efdc9bb84d49eb"
 dependencies = [
  "jmap-base-client",
  "jmap-mail-types",
@@ -807,7 +810,8 @@ dependencies = [
 [[package]]
 name = "jmap-mail-types"
 version = "0.1.2"
-source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53bdc9635075c999e240660851e92630920a88e488244ada50282130cb667710"
 dependencies = [
  "jmap-types",
  "serde",
@@ -817,7 +821,8 @@ dependencies = [
 [[package]]
 name = "jmap-types"
 version = "0.1.2"
-source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19ca78f7dea338318ac48527ff09e7121b60a1f382d172fb86784c3c6e7d2c9c"
 dependencies = [
  "serde",
  "serde_json",
@@ -2222,6 +2227,6 @@ dependencies = [
 
 [[package]]
 name = "zmij"
-version = "1.0.21"
+version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+checksum = "bd2f034a4bebf216c9e4b7083603e024cf930873fd67830cfb083c9fa33129d9"

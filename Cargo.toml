@@ -8,11 +8,11 @@ rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-jmap-types = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
-jmap-mail-types = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
-jmap-base-client = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
-jmap-mail-client = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
-stalwart-rs = { path = "crate-stalwart-rs" }
+jmap-types = "0.1"
+jmap-mail-types = "0.1"
+jmap-base-client = "0.1"
+jmap-mail-client = "0.1"
+stalwart-rs = { path = "crate-stalwart-rs", version = "0.1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -26,17 +26,15 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 [package]
-name = "herald"
+name = "herald-jmap-cli"
 version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Herald — an opinionated JMAP CLI for Stalwart Mail Server"
 repository = "https://github.com/BernhardRode/herald"
-publish = false
-
-[package.metadata.dist]
-dist = true
+keywords = ["jmap", "email", "cli", "stalwart", "mail"]
+categories = ["command-line-utilities", "email"]
 
 [[bin]]
 name = "herald"

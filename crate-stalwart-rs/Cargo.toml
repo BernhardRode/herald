@@ -4,8 +4,10 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Stalwart-specific OAuth PKCE, device flow, and admin API extensions"
-publish = false
+description = "Stalwart Mail Server OAuth PKCE, device flow, and admin API extensions"
+repository = "https://github.com/BernhardRode/herald"
+keywords = ["stalwart", "oauth", "jmap"]
+categories = ["authentication"]
 
 [dependencies]
 jmap-base-client = { workspace = true }
