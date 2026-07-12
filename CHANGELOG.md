@@ -1,4 +1,4 @@
-## [0.2.0] - 2026-07-12
+## [0.3.0] - 2026-07-12
 
 ### 🚀 Features
 
@@ -7,6 +7,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Skip release PR for ci/docs/build/chore-only fixes
+- Release v0.2.0 (#8)
 ## [0.1.1] - 2026-07-12
 
 ### 🐛 Bug Fixes
