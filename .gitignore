@@ -1,6 +1,7 @@
 /target
 Cargo.lock
 .env
+.cargo/config.toml
 *.swp
 *.swo
 *~
