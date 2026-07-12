@@ -1,0 +1,62 @@
+[workspace]
+members = ["crate-stalwart-rs", "."]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+jmap-types = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
+jmap-mail-types = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
+jmap-base-client = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
+jmap-mail-client = { git = "https://github.com/MarkAtwood/crate-jmap.git", branch = "main" }
+stalwart-rs = { path = "crate-stalwart-rs" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots"] }
+thiserror = "2"
+url = "2"
+base64 = "0.22"
+sha2 = "0.10"
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+[package]
+name = "herald"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Herald — an opinionated JMAP CLI for Stalwart Mail Server"
+publish = false
+
+[[bin]]
+name = "herald"
+path = "src/main.rs"
+
+[dependencies]
+stalwart-rs = { workspace = true }
+jmap-types = { workspace = true }
+jmap-mail-types = { workspace = true }
+jmap-base-client = { workspace = true }
+jmap-mail-client = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+base64 = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+toml = "0.8"
+dotenvy = "0.15"
+open = "5"
+rand = { workspace = true }
+bytes = "1"

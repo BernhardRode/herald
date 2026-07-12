@@ -1,0 +1,8 @@
+# Local development overrides — use sibling crate-jmap workspace.
+# These are only active when developing in the rsjmap monorepo.
+# CI uses the git dependencies from Cargo.toml.
+[patch."https://github.com/MarkAtwood/crate-jmap.git"]
+jmap-types = { path = "../crate-jmap/crate-jmap-types" }
+jmap-mail-types = { path = "../crate-jmap/crate-jmap-mail-types" }
+jmap-base-client = { path = "../crate-jmap/crate-jmap-base-client" }
+jmap-mail-client = { path = "../crate-jmap/crate-jmap-mail-client" }
