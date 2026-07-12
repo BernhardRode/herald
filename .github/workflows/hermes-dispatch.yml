@@ -144,8 +144,7 @@ jobs:
           5. GitHub Release published automatically
 
           ---
-          *Merge when ready to release.*" \
-              --label "release"
+          *Merge when ready to release.*"
           fi
         env:
           GH_TOKEN: ${{ secrets.HERMES_TOKEN }}
