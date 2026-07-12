@@ -1,3 +1,12 @@
+## [0.2.0] - 2026-07-12
+
+### 🚀 Features
+
+- Publish to crates.io as herald-jmap-cli
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Skip release PR for ci/docs/build/chore-only fixes
 ## [0.1.1] - 2026-07-12
 
 ### 🐛 Bug Fixes
@@ -18,6 +27,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Rename secret to HERMES_TOKEN, clean step names
+- Release v0.1.1 (#6)
 ## [0.1.0] - 2026-07-12
 
 ### 🚀 Features
