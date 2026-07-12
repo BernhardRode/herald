@@ -763,6 +763,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "jmap-base-client"
 version = "0.1.2"
+source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
 dependencies = [
  "base64",
  "bytes",
@@ -785,6 +786,7 @@ dependencies = [
 [[package]]
 name = "jmap-cid-types"
 version = "0.1.1"
+source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
 dependencies = [
  "serde",
  "serde_json",
@@ -793,6 +795,7 @@ dependencies = [
 [[package]]
 name = "jmap-mail-client"
 version = "0.1.2"
+source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
 dependencies = [
  "jmap-base-client",
  "jmap-mail-types",
@@ -804,6 +807,7 @@ dependencies = [
 [[package]]
 name = "jmap-mail-types"
 version = "0.1.2"
+source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
 dependencies = [
  "jmap-types",
  "serde",
@@ -813,6 +817,7 @@ dependencies = [
 [[package]]
 name = "jmap-types"
 version = "0.1.2"
+source = "git+https://github.com/MarkAtwood/crate-jmap.git?branch=main#e3c9618373359874d160624f36227241b0c8e248"
 dependencies = [
  "serde",
  "serde_json",
@@ -1361,11 +1366,11 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "1.1.1"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
+checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
 dependencies = [
- "serde_core",
+ "serde",
 ]
 
 [[package]]
@@ -1650,42 +1655,44 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.2+spec-1.1.0"
+version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81f3d15e84cbcd896376e6730314d59fb5a87f31e4b038454184435cd57defee"
+checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
 dependencies = [
- "indexmap",
- "serde_core",
+ "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_parser",
- "toml_writer",
- "winnow",
+ "toml_edit",
 ]
 
 [[package]]
 name = "toml_datetime"
-version = "1.1.1+spec-1.1.0"
+version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
+checksum = "22cddaf88f4fbc13c51aebbf5f8eceb5c7c5a9da2ac40a13519eb5b0a0e8f11c"
 dependencies = [
- "serde_core",
+ "serde",
 ]
 
 [[package]]
-name = "toml_parser"
-version = "1.1.2+spec-1.1.0"
+name = "toml_edit"
+version = "0.22.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
+checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
 dependencies = [
+ "indexmap",
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_write",
  "winnow",
 ]
 
 [[package]]
-name = "toml_writer"
-version = "1.1.1+spec-1.1.0"
+name = "toml_write"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tower"
@@ -2091,9 +2098,12 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "1.0.3"
+version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
+checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "wit-bindgen"
