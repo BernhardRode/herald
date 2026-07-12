@@ -1,4 +1,4 @@
-## [0.1.1] - 2026-07-12
+## [0.1.2] - 2026-07-12
 
 ### 🐛 Bug Fixes
 
@@ -18,6 +18,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(ci)* Rename secret to HERMES_TOKEN, clean step names
+- Release v0.1.1 (#6)
 ## [0.1.0] - 2026-07-12
 
 ### 🚀 Features
