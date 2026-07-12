@@ -51,10 +51,13 @@ jobs:
             RANGE="${LAST_TAG}..HEAD"
           fi
 
-          # Check for breaking changes or features
+          # Check for breaking changes, features, or meaningful fixes
+          # Exclude ci/chore/docs/build scopes — they don't warrant a release
           HAS_BREAKING=$(git log "$RANGE" --format="%s" | grep -c "^.*!:" || true)
           HAS_FEAT=$(git log "$RANGE" --format="%s" | grep -c "^feat" || true)
-          HAS_FIX=$(git log "$RANGE" --format="%s" | grep -c "^fix" || true)
+          HAS_FIX=$(git log "$RANGE" --format="%s" | grep -Ec "^fix(\([^)]*\))?:" | grep -v "^fix(ci)" | grep -v "^fix(deps)" | wc -l || true)
+          # More robust: count fix commits that are NOT ci/docs/build/chore scoped
+          HAS_FIX=$(git log "$RANGE" --format="%s" | grep "^fix" | grep -vcE "^fix\((ci|deps|build|docs|chore)\)" || true)
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
 
