@@ -189,12 +189,13 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
             if !app.popouts.popouts.is_empty() {
                 hint(&mut spans, "1-0", "popouts", Color::Magenta);
             }
+            hint(&mut spans, "Esc", "back", Color::Yellow);
             hint(&mut spans, "q", "quit", Color::Yellow);
         }
         InputMode::Search => {
-            hint(&mut spans, "Esc", "back", Color::Yellow);
+            hint(&mut spans, "Esc", "cancel", Color::Yellow);
             hint(&mut spans, "↑↓", "nav", Color::Yellow);
-            hint(&mut spans, "Enter", "run", Color::Yellow);
+            hint(&mut spans, "Enter", "select", Color::Yellow);
             spans.push(Span::styled(
                 "/compose /reply /archive /delete /add-contact /add-event",
                 Style::default().fg(Color::DarkGray),
@@ -227,8 +228,8 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
             spans.push(Span::styled(
                 format!(" ⚠ {} ", action.prompt()),
                 Style::default()
-                    .fg(Color::Yellow)
-                    .bg(Color::Red)
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::raw("  "));
@@ -266,8 +267,14 @@ fn draw_quit_confirm(frame: &mut Frame, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Red))
-        .title(" Quit Herald? ");
+        .border_style(Style::default().fg(Color::Red).bg(Color::Black))
+        .title(Span::styled(
+            " Quit Herald? ",
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        ));
 
     let text = vec![
         Line::from(""),
@@ -275,18 +282,23 @@ fn draw_quit_confirm(frame: &mut Frame, area: Rect) {
             Span::styled(
                 "  Enter",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" quit    "),
-            Span::styled("any key", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "any key",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" cancel"),
         ]),
     ];
 
     let paragraph = Paragraph::new(text)
         .block(block)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(Color::White).bg(Color::Black));
 
     frame.render_widget(paragraph, popup_area);
 }
