@@ -223,6 +223,27 @@ impl App {
                 self.calendar.on_loaded(events.clone());
             }
 
+            Event::RemoteChanged {
+                mail,
+                contacts,
+                calendar,
+                new_mail,
+            } => {
+                if *mail {
+                    self.send(Command::LoadFolders);
+                    self.reload_mail_page();
+                }
+                if *contacts && self.contacts_loaded {
+                    self.send(Command::LoadContacts);
+                }
+                if *calendar && self.events_loaded {
+                    self.send(Command::LoadEvents);
+                }
+                if *new_mail {
+                    self.tooltip = Some(Tooltip::info("📬 New mail"));
+                }
+            }
+
             Event::ActionCompleted(msg) => {
                 self.busy = self.busy.saturating_sub(1);
                 self.tooltip = Some(Tooltip::info(msg.clone()));
@@ -305,12 +326,16 @@ impl App {
                             position,
                         });
                     }
+                    self.mark_selected_mail_read();
                 }
                 Screen::Contacts => self.contacts.select_next(),
                 Screen::Calendar => self.calendar.select_next(),
             },
             SelectPrev => match self.screen {
-                Screen::Mail => self.mail.select_prev(),
+                Screen::Mail => {
+                    self.mail.select_prev();
+                    self.mark_selected_mail_read();
+                }
                 Screen::Contacts => self.contacts.select_prev(),
                 Screen::Calendar => self.calendar.select_prev(),
             },
@@ -658,7 +683,26 @@ impl App {
         }
     }
 
+    /// Mark the mail under the cursor as read: optimistic local flip plus a
+    /// fire-and-forget `Email/set`. No-op when already read or when the
+    /// cursor is not on the mail list.
+    fn mark_selected_mail_read(&mut self) {
+        if !matches!(self.mail.focus, MailFocus::List | MailFocus::SearchResults) {
+            return;
+        }
+        let Some(mail) = self.mail.selected_mail() else {
+            return;
+        };
+        if mail.is_read {
+            return;
+        }
+        let id = mail.id.clone();
+        self.mail.mark_read(&id);
+        self.send(Command::MarkMailRead(id));
+    }
+
     fn open_mail_popup(&mut self) {
+        self.mark_selected_mail_read();
         let Some(mail) = self.mail.selected_mail() else {
             return;
         };
@@ -1255,7 +1299,6 @@ mod tests {
             name: name.into(),
             parent_id: None,
             role: None,
-            sort_order: 0,
             total_emails: 0,
             unread_emails: 0,
             display_name: name.into(),
@@ -1427,6 +1470,7 @@ mod tests {
                 date: "2026-07-13".into(),
                 preview: "line one".into(),
                 folder_id: Some("in".into()),
+                is_read: false,
             }],
             position: 0,
             all_folders: false,

@@ -148,6 +148,7 @@ impl Config {
     }
 
     /// Get a profile by name (or the default profile).
+    #[allow(dead_code)]
     pub fn get_profile(&self, name: Option<&str>) -> Result<&Profile, ConfigError> {
         self.get_profile_with_name(name).map(|(_, p)| p)
     }

@@ -3,6 +3,7 @@
 mod list;
 mod read;
 mod send;
+mod watch;
 
 use clap::Subcommand;
 use jmap_base_client::JmapClient;
@@ -37,6 +38,15 @@ pub enum MailCommand {
         /// Email ID to read
         #[arg(long)]
         id: String,
+    },
+    /// Watch a folder and print each incoming email as it arrives
+    Watch {
+        /// Folder to watch, by name or role (default: Inbox)
+        #[arg(long, conflicts_with = "all")]
+        folder: Option<String>,
+        /// Watch all folders
+        #[arg(long)]
+        all: bool,
     },
     /// Move all emails from one mailbox to another
     Move {
@@ -73,6 +83,7 @@ pub async fn handle(
         MailCommand::Mailboxes => list::list_mailboxes(client).await,
         MailCommand::List => list::list_emails(client).await,
         MailCommand::Read { id } => read::read_email(client, id).await,
+        MailCommand::Watch { folder, all } => watch::watch(client, folder.as_deref(), *all).await,
         MailCommand::Move { from, to } => handle_move(client, from, to).await,
         MailCommand::FolderDelete { id, force } => {
             handle_folder_delete(client, id, *force).await

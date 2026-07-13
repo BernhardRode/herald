@@ -840,6 +840,7 @@ dependencies = [
  "crossterm 0.28.1",
  "dirs",
  "dotenvy",
+ "futures",
  "jmap-base-client",
  "jmap-calendars-client",
  "jmap-calendars-types",

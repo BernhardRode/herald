@@ -6,6 +6,7 @@
 pub mod calendar;
 pub mod contacts;
 pub mod mail;
+pub mod push;
 
 /// Common result type for JMAP operations.
 pub type JmapResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;

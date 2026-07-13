@@ -104,6 +104,9 @@ pub enum Command {
         target_mailbox_id: String,
         action: String,
     },
+    /// Fire-and-forget `$seen` keyword update; not tracked as busy and does
+    /// not reload on completion (the optimistic local update suffices).
+    MarkMailRead(String),
     CreateContact {
         name: String,
         email: String,
@@ -172,6 +175,16 @@ pub enum Event {
     MailBodyLoaded(Box<FullEmail>),
     ContactsLoaded(Vec<ContactEntry>),
     EventsLoaded(Vec<EventEntry>),
+
+    /// A server push (RFC 8620 §7.3) reported changed state; flags say which
+    /// screens are stale. `new_mail` is set when the server distinguishes a
+    /// fresh delivery (the `EmailDelivery` pseudo-type).
+    RemoteChanged {
+        mail: bool,
+        contacts: bool,
+        calendar: bool,
+        new_mail: bool,
+    },
 
     /// A mutating operation succeeded; the message is shown as a tooltip and
     /// the current screen's data is reloaded.

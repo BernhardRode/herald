@@ -22,6 +22,7 @@ pub struct Worker {
     client: Option<JmapClient>,
     profile: Profile,
     profile_name: String,
+    push_watching: bool,
 }
 
 impl Worker {
@@ -31,22 +32,60 @@ impl Worker {
             client: None,
             profile,
             profile_name,
+            push_watching: false,
         }
     }
 
-    fn send(&self, event: Event) {
-        let _ = self.sender.send(Message::Event(event));
-    }
-
-    /// Handle one message; data commands spawn async tasks.
     pub fn handle(&mut self, message: &Message) {
         match message {
             Message::Event(Event::ClientReady(client)) => {
                 self.client = Some((**client).clone());
+                self.spawn_push_watcher();
             }
             Message::Command(cmd) => self.handle_command(cmd),
             _ => {}
         }
+    }
+
+    /// Long-lived SSE watcher: every server push becomes a
+    /// [`Event::RemoteChanged`] so the app can refresh stale screens.
+    fn spawn_push_watcher(&mut self) {
+        if self.push_watching {
+            return;
+        }
+        let Some(client) = self.client.clone() else {
+            return;
+        };
+        self.push_watching = true;
+        let tx = self.sender.clone();
+        tokio::spawn(jmap::push::watch_state_changes(client, "*", move |change| {
+            let (mut mail, mut contacts, mut calendar, mut new_mail) =
+                (false, false, false, false);
+            for types in change.changed.values() {
+                for type_name in types.keys() {
+                    match type_name.as_str() {
+                        "Email" | "Mailbox" | "Thread" => mail = true,
+                        "EmailDelivery" => {
+                            mail = true;
+                            new_mail = true;
+                        }
+                        "ContactCard" | "AddressBook" => contacts = true,
+                        "CalendarEvent" | "Calendar" => calendar = true,
+                        _ => {}
+                    }
+                }
+            }
+            if !(mail || contacts || calendar) {
+                return !tx.is_closed();
+            }
+            tx.send(Message::Event(Event::RemoteChanged {
+                mail,
+                contacts,
+                calendar,
+                new_mail,
+            }))
+            .is_ok()
+        }));
     }
 
     fn client(&self) -> Option<JmapClient> {
@@ -228,6 +267,20 @@ impl Worker {
                 });
             }
 
+            Command::MarkMailRead(id) => {
+                let Some(client) = self.client() else { return };
+                let id = id.clone();
+                tokio::spawn(async move {
+                    // Fire-and-forget: the app already flipped the entry
+                    // locally, so only failures are worth reporting.
+                    if let Err(e) = jmap::mail::mark_read(&client, &id).await {
+                        let _ = tx.send(Message::Event(Event::ActionFailed(format!(
+                            "mark read: {e}"
+                        ))));
+                    }
+                });
+            }
+
             Command::CreateContact { name, email, phone } => {
                 let Some(client) = self.client() else { return };
                 let (name, email, phone) = (name.clone(), email.clone(), phone.clone());
@@ -327,7 +380,6 @@ async fn fetch_raw_folders(client: &JmapClient) -> JmapResult<Vec<RawFolder>> {
             name: m.name.clone(),
             parent_id: m.parent_id.as_ref().map(|p| p.as_ref().to_string()),
             role: m.role.as_ref().map(|r| r.to_wire_str().to_string()),
-            sort_order: m.sort_order,
             total_emails: m.total_emails,
             unread_emails: m.unread_emails,
         })
@@ -359,44 +411,46 @@ async fn fetch_mail_page(
         return Ok(Vec::new());
     }
 
-    let email_resp = sc
-        .email_get(
-            Some(&query_resp.ids),
-            Some(&[
-                "id",
-                "blobId",
-                "threadId",
-                "mailboxIds",
-                "size",
-                "receivedAt",
-                "subject",
-                "from",
-                "preview",
-            ]),
-            None,
-        )
-        .await?;
+            let email_resp = sc
+                .email_get(
+                    Some(&query_resp.ids),
+                    Some(&[
+                        "id",
+                        "blobId",
+                        "threadId",
+                        "mailboxIds",
+                        "size",
+                        "receivedAt",
+                        "subject",
+                        "from",
+                        "preview",
+                        "keywords",
+                    ]),
+                    None,
+                )
+                .await?;
 
-    Ok(email_resp
-        .list
-        .iter()
-        .map(|e| {
-            let from = e
-                .from
-                .as_ref()
-                .and_then(|addrs| addrs.first())
-                .map(|a| a.name.as_deref().unwrap_or(&a.email).to_string())
-                .unwrap_or_else(|| "(unknown)".into());
-            MailEntry {
-                id: e.id.as_ref().to_string(),
-                subject: e.subject.as_deref().unwrap_or("(no subject)").to_string(),
-                from,
-                date: e.received_at.as_ref().to_string(),
-                preview: e.preview.as_deref().unwrap_or("").to_string(),
-                folder_id: e.mailbox_ids.keys().next().map(|id| id.as_ref().to_string()),
-            }
-        })
-        .collect())
+            Ok(email_resp
+                .list
+                .iter()
+                .map(|e| {
+                    let from = e
+                        .from
+                        .as_ref()
+                        .and_then(|addrs| addrs.first())
+                        .map(|a| a.name.as_deref().unwrap_or(&a.email).to_string())
+                        .unwrap_or_else(|| "(unknown)".into());
+                    MailEntry {
+                        id: e.id.as_ref().to_string(),
+                        subject: e.subject.as_deref().unwrap_or("(no subject)").to_string(),
+                        from,
+                        date: e.received_at.as_ref().to_string(),
+                        preview: e.preview.as_deref().unwrap_or("").to_string(),
+                        folder_id: e.mailbox_ids.keys().next().map(|id| id.as_ref().to_string()),
+                        is_read: e.keywords.contains_key(jmap_mail_types::keyword::SEEN),
+                    }
+                })
+                .collect())
 }
 
 async fn fetch_contacts(client: &JmapClient) -> JmapResult<Vec<ContactEntry>> {
