@@ -353,6 +353,103 @@ fn generate_message_id(from_email: &str) -> String {
     format!("{timestamp}.{random:016x}@{domain}")
 }
 
+/// A fully fetched email for display: headers plus the complete text body.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct FullEmail {
+    pub id: String,
+    pub subject: String,
+    pub from: String,
+    pub to: String,
+    pub date: String,
+    pub body: String,
+}
+
+/// Fetch one email with its full text body (falls back to the preview).
+#[allow(dead_code)]
+pub async fn fetch_full_email(client: &JmapClient, id: &str) -> JmapResult<FullEmail> {
+    let session = client.fetch_session().await?;
+    let sc = client.with_mail_session(session);
+
+    let ids = [Id::from(id)];
+    let params = jmap_mail_client::EmailGetParams {
+        fetch_text_body_values: Some(true),
+        max_body_value_bytes: Some(256 * 1024),
+        ..Default::default()
+    };
+    let resp = sc
+        .email_get(
+            Some(&ids),
+            Some(&[
+                "id",
+                "blobId",
+                "threadId",
+                "mailboxIds",
+                "size",
+                "receivedAt",
+                "subject",
+                "from",
+                "to",
+                "sentAt",
+                "textBody",
+                "bodyValues",
+                "preview",
+            ]),
+            Some(params),
+        )
+        .await?;
+
+    let email = resp
+        .list
+        .first()
+        .ok_or_else(|| format!("email not found: {id}"))?;
+
+    let format_addr = |name: Option<&str>, email: &str| match name {
+        Some(name) => format!("{name} <{email}>"),
+        None => email.to_string(),
+    };
+    let from = email
+        .from
+        .as_ref()
+        .and_then(|addrs| addrs.first())
+        .map(|a| format_addr(a.name.as_deref(), &a.email))
+        .unwrap_or_else(|| "(unknown)".into());
+    let to = email
+        .to
+        .as_ref()
+        .map(|addrs| {
+            addrs
+                .iter()
+                .map(|a| format_addr(a.name.as_deref(), &a.email))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    let date = email
+        .sent_at
+        .as_ref()
+        .map(|d| d.as_ref().to_string())
+        .unwrap_or_else(|| email.received_at.as_ref().to_string());
+
+    let body = email
+        .text_body
+        .first()
+        .and_then(|part| part.part_id.as_ref())
+        .and_then(|part_id| email.body_values.get(part_id))
+        .map(|bv| bv.value.clone())
+        .or_else(|| email.preview.clone())
+        .unwrap_or_else(|| "(no text body available)".to_string());
+
+    Ok(FullEmail {
+        id: email.id.as_ref().to_string(),
+        subject: email.subject.as_deref().unwrap_or("(no subject)").to_string(),
+        from,
+        to,
+        date,
+        body,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

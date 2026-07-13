@@ -89,6 +89,49 @@ pub async fn create_event(
     check_set_response(&resp, "CalendarEvent/set", "notCreated")
 }
 
+/// Update a calendar event's title, start, and duration in place.
+#[allow(dead_code)]
+pub async fn update_event(
+    client: &JmapClient,
+    event_id: &str,
+    title: &str,
+    start: &str,
+    duration: &str,
+) -> JmapResult<()> {
+    let session = client.fetch_session().await?;
+    let account_id = session
+        .primary_account_id("urn:ietf:params:jmap:calendars")
+        .ok_or("no primary calendars account in session")?;
+
+    let mut patch = serde_json::Map::new();
+    patch.insert("title".into(), json!(title));
+    if !start.trim().is_empty() {
+        patch.insert("start".into(), json!(start.trim()));
+    }
+    if !duration.trim().is_empty() {
+        patch.insert("duration".into(), json!(duration.trim()));
+    }
+
+    let request_args = json!({
+        "accountId": account_id,
+        "update": { event_id: patch }
+    });
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:calendars".to_string(),
+        ],
+        vec![(
+            "CalendarEvent/set".to_string(),
+            request_args,
+            "upd1".to_string(),
+        )],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+    check_set_response(&resp, "CalendarEvent/set", "notUpdated")
+}
+
 /// Delete a calendar event by id.
 pub async fn delete_event(client: &JmapClient, event_id: &str) -> JmapResult<()> {
     let session = client.fetch_session().await?;

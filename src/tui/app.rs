@@ -63,8 +63,16 @@ fn run_loop(
             // Search mode changed (all-folder ↔ single-folder) → reload mail data
             if app.needs_search_reload {
                 app.needs_search_reload = false;
+                app.needs_more_mails = false;
                 handle.block_on(data::load_search_mails(&mut app));
                 app.refresh_matcher();
+            }
+
+            // Selection nearing the end of loaded mails → fetch the next page.
+            // New entries are injected incrementally; no matcher refresh needed.
+            if app.needs_more_mails {
+                app.needs_more_mails = false;
+                handle.block_on(data::load_more_mails(&mut app));
             }
 
             // Server-side actions queued → execute, then re-fetch
@@ -89,12 +97,15 @@ fn run_loop(
 }
 
 fn set_cursor_shape(mode: &InputMode) {
-    use crossterm::cursor::SetCursorStyle;
+    use crossterm::cursor::{Hide, Show, SetCursorStyle};
     use crossterm::execute;
 
-    let style = match mode {
-        InputMode::Editing | InputMode::Search => SetCursorStyle::BlinkingBar,
-        _ => SetCursorStyle::BlinkingUnderScore,
-    };
-    let _ = execute!(std::io::stdout(), style);
+    match mode {
+        InputMode::Editing | InputMode::Search => {
+            let _ = execute!(std::io::stdout(), Show, SetCursorStyle::BlinkingBar);
+        }
+        _ => {
+            let _ = execute!(std::io::stdout(), Hide);
+        }
+    }
 }

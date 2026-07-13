@@ -79,6 +79,53 @@ pub async fn create_contact(
     Ok(())
 }
 
+/// Update a contact card in place: name, first email, first phone.
+///
+/// Empty email/phone remove the respective property from the card.
+#[allow(dead_code)]
+pub async fn update_contact(
+    client: &JmapClient,
+    contact_id: &str,
+    name: &str,
+    email: &str,
+    phone: &str,
+) -> JmapResult<()> {
+    use jmap_types::PatchObject;
+
+    let session = client.fetch_session().await?;
+    let sc = client.with_contacts_session(session);
+
+    let mut patch = serde_json::Map::new();
+    patch.insert("name".into(), json!({ "full": name }));
+    patch.insert(
+        "emails".into(),
+        if email.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            json!({ "e1": { "address": email.trim() } })
+        },
+    );
+    patch.insert(
+        "phones".into(),
+        if phone.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            json!({ "p1": { "number": phone.trim() } })
+        },
+    );
+
+    let mut update = std::collections::HashMap::new();
+    update.insert(jmap_types::Id::from(contact_id), PatchObject::from_map(patch));
+
+    let resp = sc.contact_card_set(None, Some(update), None).await?;
+    if let Some(not_updated) = &resp.not_updated {
+        if let Some((_key, err)) = not_updated.iter().next() {
+            return Err(format!("Contact update failed: {:?}", err).into());
+        }
+    }
+    Ok(())
+}
+
 /// Delete a contact card by id.
 pub async fn delete_contact(client: &JmapClient, contact_id: &str) -> JmapResult<()> {
     let session = client.fetch_session().await?;
