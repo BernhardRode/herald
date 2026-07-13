@@ -65,11 +65,11 @@ jobs:
         # failing. otherwise `sh` won't catch that `curl` returned non-0
         shell: bash
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
-      - name: Cache dist
-        uses: actions/upload-artifact@043fb4652f78ddd2a1c2b3b5ec3f4e36a0a0a5af # v7.0.1
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/dist
+       - name: Cache dist
+         uses: actions/upload-artifact@v4
+         with:
+           name: cargo-dist-cache
+           path: ~/.cargo/bin/dist
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -81,11 +81,11 @@ jobs:
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
-      - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@043fb4652f78ddd2a1c2b3b5ec3f4e36a0a0a5af # v7.0.1
-        with:
-          name: artifacts-plan-dist-manifest
-          path: plan-dist-manifest.json
+       - name: "Upload dist-manifest.json"
+         uses: actions/upload-artifact@v4
+         with:
+           name: artifacts-plan-dist-manifest
+           path: plan-dist-manifest.json
 
   # Build and packages all the platform-specific things
   build-local-artifacts:
@@ -157,13 +157,13 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-      - name: "Upload artifacts"
-        uses: actions/upload-artifact@043fb4652f78ddd2a1c2b3b5ec3f4e36a0a0a5af # v7.0.1
-        with:
-          name: artifacts-build-local-${{ join(matrix.targets, '_') }}
-          path: |
-            ${{ steps.cargo-dist.outputs.paths }}
-            ${{ env.BUILD_MANIFEST_NAME }}
+       - name: "Upload artifacts"
+         uses: actions/upload-artifact@v4
+         with:
+           name: artifacts-build-local-${{ join(matrix.targets, '_') }}
+           path: |
+             ${{ steps.cargo-dist.outputs.paths }}
+             ${{ env.BUILD_MANIFEST_NAME }}
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
@@ -204,13 +204,13 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-      - name: "Upload artifacts"
-        uses: actions/upload-artifact@043fb4652f78ddd2a1c2b3b5ec3f4e36a0a0a5af # v7.0.1
-        with:
-          name: artifacts-build-global
-          path: |
-            ${{ steps.cargo-dist.outputs.paths }}
-            ${{ env.BUILD_MANIFEST_NAME }}
+       - name: "Upload artifacts"
+         uses: actions/upload-artifact@v4
+         with:
+           name: artifacts-build-global
+           path: |
+             ${{ steps.cargo-dist.outputs.paths }}
+             ${{ env.BUILD_MANIFEST_NAME }}
   # Determines if we should publish/announce
   host:
     needs:
