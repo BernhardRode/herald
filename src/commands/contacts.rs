@@ -4,7 +4,8 @@ use clap::Subcommand;
 use jmap_base_client::JmapClient;
 use jmap_contacts_client::JmapContactsExt;
 
-use crate::sanitize::sanitize_display;
+use crate::jmap::contacts::{extract_contact_name, extract_first_email};
+use crate::text::sanitize_display;
 
 #[derive(Debug, Subcommand)]
 pub enum ContactsCommand {
@@ -112,43 +113,4 @@ async fn list_contacts(
         println!("{:<12} {:<30} {}", id, name, email);
     }
     Ok(())
-}
-
-/// Extract a display name from a ContactCard's `name` field (JSContact Name object).
-fn extract_contact_name(card: &jmap_contacts_types::ContactCard) -> String {
-    if let Some(name_val) = &card.name {
-        // JSContact Name object has "full" or "given"/"surname" components
-        if let Some(full) = name_val.get("full") {
-            if let Some(s) = full.as_str() {
-                return s.to_string();
-            }
-        }
-        // Try components array
-        if let Some(components) = name_val.get("components") {
-            if let Some(arr) = components.as_array() {
-                let parts: Vec<&str> = arr
-                    .iter()
-                    .filter_map(|c| c.get("value").and_then(|v| v.as_str()))
-                    .collect();
-                if !parts.is_empty() {
-                    return parts.join(" ");
-                }
-            }
-        }
-    }
-    "(no name)".to_string()
-}
-
-/// Extract the first email address from a ContactCard's `emails` map.
-fn extract_first_email(card: &jmap_contacts_types::ContactCard) -> String {
-    if let Some(emails_val) = &card.emails {
-        if let Some(obj) = emails_val.as_object() {
-            for (_key, email_obj) in obj {
-                if let Some(addr) = email_obj.get("address").and_then(|v| v.as_str()) {
-                    return addr.to_string();
-                }
-            }
-        }
-    }
-    "".to_string()
 }

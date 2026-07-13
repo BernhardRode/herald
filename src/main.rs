@@ -14,9 +14,9 @@ use tracing_subscriber::EnvFilter;
 mod auth;
 mod commands;
 mod config;
-mod output;
-pub mod sanitize;
+mod jmap;
 pub mod secret;
+pub mod text;
 mod tui;
 pub mod validate;
 
@@ -68,9 +68,6 @@ enum Command {
 async fn main() {
     let cli = Cli::parse();
 
-    // Load env from explicit path, or conditionally from CWD in dev builds
-    load_env(cli.env_file.as_deref());
-
     // Initialize tracing
     let filter = if cli.verbose {
         EnvFilter::new("herald=debug,stalwart_rs=debug,jmap_base_client=debug")
@@ -82,6 +79,9 @@ async fn main() {
         .with_target(false)
         .without_time()
         .init();
+
+    // Load env from explicit path, or from CWD in debug builds only
+    load_env(cli.env_file.as_deref());
 
     if let Err(e) = run(cli).await {
         eprintln!("Error: {e}");
@@ -101,7 +101,12 @@ fn load_env(env_file: Option<&std::path::Path>) {
             Err(e) => tracing::warn!("Failed to load {:?}: {}", path, e),
         }
     } else {
-        let _ = dotenvy::dotenv();
+        // A .env planted in an untrusted CWD could redirect credentials to an
+        // attacker's server, so release builds require the explicit --env-file.
+        #[cfg(debug_assertions)]
+        if let Ok(path) = dotenvy::dotenv() {
+            tracing::warn!("Loaded .env from {:?} (dev builds only)", path);
+        }
     }
 }
 
@@ -110,33 +115,22 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Command::Config(cmd) => {
             commands::config::handle(cmd).await?;
         }
-        Command::Auth(cmd) => {
-            let config = config::Config::resolve()?;
-            let (profile_name, profile) = config.get_profile_with_name(cli.profile.as_deref())?;
-            let client = auth::create_client(profile, profile_name).await?;
-            commands::auth::handle(cmd, &client, profile).await?;
-        }
-        Command::Mail(cmd) => {
-            let config = config::Config::resolve()?;
-            let (profile_name, profile) = config.get_profile_with_name(cli.profile.as_deref())?;
-            let client = auth::create_client(profile, profile_name).await?;
-            commands::mail::handle(cmd, &client, profile).await?;
-        }
-        Command::Contacts(cmd) => {
-            let config = config::Config::resolve()?;
-            let (profile_name, profile) = config.get_profile_with_name(cli.profile.as_deref())?;
-            let client = auth::create_client(profile, profile_name).await?;
-            commands::contacts::handle(cmd, &client).await?;
-        }
-        Command::Calendar(cmd) => {
-            let config = config::Config::resolve()?;
-            let (profile_name, profile) = config.get_profile_with_name(cli.profile.as_deref())?;
-            let client = auth::create_client(profile, profile_name).await?;
-            commands::calendar::handle(cmd, &client).await?;
-        }
         Command::Tui => {
             let config = config::Config::resolve()?;
             tui::run(config, cli.profile.as_deref())?;
+        }
+        // All remaining commands need a resolved profile and connected client
+        cmd => {
+            let config = config::Config::resolve()?;
+            let (profile_name, profile) = config.get_profile_with_name(cli.profile.as_deref())?;
+            let client = auth::create_client(profile, profile_name).await?;
+            match cmd {
+                Command::Auth(cmd) => commands::auth::handle(cmd, &client, profile).await?,
+                Command::Mail(cmd) => commands::mail::handle(cmd, &client, profile).await?,
+                Command::Contacts(cmd) => commands::contacts::handle(cmd, &client).await?,
+                Command::Calendar(cmd) => commands::calendar::handle(cmd, &client).await?,
+                Command::Config(_) | Command::Tui => unreachable!("handled above"),
+            }
         }
     }
     Ok(())

@@ -5,7 +5,8 @@ use jmap_base_client::JmapClient;
 use jmap_calendars_client::JmapCalendarsExt;
 use jmap_calendars_types::{CalendarEventComparator, CalendarEventFilterCondition};
 
-use crate::sanitize::sanitize_display;
+use crate::jmap::calendar::utc_now_iso8601;
+use crate::text::{sanitize_display, truncate_str};
 
 #[derive(Debug, Subcommand)]
 pub enum CalendarCommand {
@@ -49,43 +50,6 @@ async fn list_calendars(
         println!("{:<12} {:<30} {}", id, name, color);
     }
     Ok(())
-}
-
-/// Return the current UTC time as an ISO 8601 string (e.g. "2025-01-15T12:00:00Z")
-/// suitable for the CalendarEvent/query `after` filter.
-fn utc_now_iso8601() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    // Convert epoch seconds to a basic UTC datetime string.
-    // We compute year/month/day/hour/min/sec from the epoch manually to avoid
-    // pulling in a datetime crate just for this.
-    let days = secs / 86400;
-    let time_of_day = secs % 86400;
-    let hours = time_of_day / 3600;
-    let minutes = (time_of_day % 3600) / 60;
-    let seconds = time_of_day % 60;
-
-    // Civil date from days since 1970-01-01 (algorithm from Howard Hinnant)
-    let z = days + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
-        y, m, d, hours, minutes, seconds
-    )
 }
 
 async fn list_events(
@@ -154,14 +118,4 @@ async fn list_events(
         );
     }
     Ok(())
-}
-
-fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        let mut truncated: String = s.chars().take(max_len.saturating_sub(1)).collect();
-        truncated.push('…');
-        truncated
-    }
 }
