@@ -2,24 +2,37 @@
 
 use clap::Subcommand;
 
-use crate::config::Config;
+use crate::auth::{create_dir_secure, create_file_secure};
+use crate::config::{AuthMethod, Config};
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
     /// Show current configuration
-    Show,
+    Show {
+        /// Show actual secret values (passwords, tokens) instead of "***"
+        #[arg(long)]
+        reveal: bool,
+    },
     /// Print the config file path
     Path,
     /// Create a starter config file
     Init,
+    /// Print the .env.example template (embedded at build time)
+    Env,
 }
 
 pub async fn handle(cmd: &ConfigCommand) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     match cmd {
-        ConfigCommand::Show => {
+        ConfigCommand::Show { reveal } => {
             let config = Config::resolve()?;
-            let toml_str = toml::to_string_pretty(&config)?;
-            println!("{toml_str}");
+            if *reveal {
+                let revealed = reveal_config(&config);
+                println!("{revealed}");
+            } else {
+                // Default: Secret<String> serializes to "***"
+                let toml_str = toml::to_string_pretty(&config)?;
+                println!("{toml_str}");
+            }
         }
         ConfigCommand::Path => {
             let path = Config::config_path()?;
@@ -31,42 +44,56 @@ pub async fn handle(cmd: &ConfigCommand) -> Result<(), Box<dyn std::error::Error
                 println!("Config already exists at: {}", path.display());
                 return Ok(());
             }
+            // Ensure parent directory exists with secure permissions (0700 on Unix)
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
+                create_dir_secure(parent)?;
             }
-            let template = r#"# Herald CLI Configuration
-# See: https://github.com/bernhardrode/rsjmap/tree/main/crate-herald
-
-default_profile = "default"
-
-[profiles.default]
-server_url = "https://mail.example.com"
-from_email = "you@example.com"
-from_name = "Your Name"
-
-[profiles.default.auth]
-method = "app-password"
-username = "you@example.com"
-password = "your-app-password"
-
-# Alternative: API key
-# [profiles.default.auth]
-# method = "api-key"
-# token = "your-api-key"
-
-# Alternative: OAuth browser flow
-# [profiles.default.auth]
-# method = "oauth-browser"
-# client_id = "herald"
-
-# Alternative: OAuth device flow
-# [profiles.default.auth]
-# method = "oauth-device"
-# client_id = "herald"
-"#;
-            std::fs::write(&path, template)?;
+            // Write config with secure permissions (0600 on Unix)
+            create_file_secure(&path, crate::config::CONFIG_EXAMPLE.as_bytes())?;
             println!("✓ Config created at: {}", path.display());
+        }
+        ConfigCommand::Env => {
+            print!("{}", crate::config::ENV_EXAMPLE);
         }
     }
     Ok(())
+}
+
+/// Serialize the config with secret values exposed (for `--reveal`).
+///
+/// Builds a `toml::Value` from the config (which redacts secrets by default),
+/// then walks through profiles and replaces "***" with actual exposed values.
+fn reveal_config(config: &Config) -> String {
+    let mut value = match toml::Value::try_from(config) {
+        Ok(v) => v,
+        Err(_) => return String::new(),
+    };
+
+    if let Some(profiles) = value.get_mut("profiles").and_then(|p| p.as_table_mut()) {
+        for (name, profile_val) in profiles.iter_mut() {
+            if let Some(profile) = config.profiles.get(name) {
+                if let Some(auth) = profile_val.get_mut("auth").and_then(|a| a.as_table_mut()) {
+                    match &profile.auth {
+                        AuthMethod::AppPassword { password, .. } => {
+                            auth.insert(
+                                "password".to_string(),
+                                toml::Value::String(password.expose().clone()),
+                            );
+                        }
+                        AuthMethod::ApiKey { token } => {
+                            auth.insert(
+                                "token".to_string(),
+                                toml::Value::String(token.expose().clone()),
+                            );
+                        }
+                        AuthMethod::OAuthBrowser { .. } | AuthMethod::OAuthDevice { .. } => {
+                            // No secrets to reveal for OAuth methods
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    toml::to_string_pretty(&value).unwrap_or_default()
 }
