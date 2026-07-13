@@ -346,6 +346,48 @@ fn toml_parse_api_key_and_oauth_device() {
 }
 
 #[test]
+fn toml_parse_missing_auth_defaults_to_oauth_browser() {
+    let toml_str = r#"
+        [profiles.default]
+        server_url = "https://mail.example.com"
+    "#;
+
+    let config: Config = toml::from_str(toml_str).expect("profile without auth should parse");
+    let profile = config.profiles.get("default").unwrap();
+    match &profile.auth {
+        AuthMethod::OAuthBrowser { client_id } => assert_eq!(client_id, "herald"),
+        other => panic!("expected OAuthBrowser default, got {other:?}"),
+    }
+}
+
+#[test]
+fn toml_parse_oauth_method_names_and_default_client_id() {
+    let toml_str = r#"
+        [profiles.browser]
+        server_url = "https://a.example.com"
+
+        [profiles.browser.auth]
+        method = "oauth-browser"
+
+        [profiles.device]
+        server_url = "https://b.example.com"
+
+        [profiles.device.auth]
+        method = "oauth-device"
+    "#;
+
+    let config: Config = toml::from_str(toml_str).expect("documented method names should parse");
+    match &config.profiles.get("browser").unwrap().auth {
+        AuthMethod::OAuthBrowser { client_id } => assert_eq!(client_id, "herald"),
+        other => panic!("expected OAuthBrowser, got {other:?}"),
+    }
+    match &config.profiles.get("device").unwrap().auth {
+        AuthMethod::OAuthDevice { client_id } => assert_eq!(client_id, "herald"),
+        other => panic!("expected OAuthDevice, got {other:?}"),
+    }
+}
+
+#[test]
 fn toml_parse_empty_config() {
     let config: Config = toml::from_str("").expect("empty TOML should parse to default");
     assert!(config.default_profile.is_none());

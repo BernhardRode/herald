@@ -24,6 +24,8 @@ from_name = "Your Name"
 # Allow non-HTTPS server URLs (for local development only)
 # allow_insecure = false
 
+# Authentication. Optional — when the [profiles.<name>.auth] section is
+# omitted, Herald uses the OAuth browser flow (client_id "herald").
 [profiles.default.auth]
 method = "app-password"
 username = "you@example.com"
@@ -44,7 +46,8 @@ password = "your-app-password"
 # method = "api-key"
 # token = "your-api-key"
 #
-# OAuth browser flow (Authorization Code + PKCE):
+# OAuth browser flow (Authorization Code + PKCE) — the default when no
+# auth section is configured. client_id defaults to "herald":
 # [profiles.default.auth]
 # method = "oauth-browser"
 # client_id = "herald"
