@@ -22,6 +22,7 @@ pub enum MailFocus {
     List,
     Folders,
     Account,
+    SearchResults,
 }
 
 pub struct MailScreen {
@@ -180,6 +181,17 @@ impl MailScreen {
                         .win
                         .near_end(self.matched_count as usize, LAZY_LOAD_THRESHOLD)
             }
+            MailFocus::SearchResults => {
+                self.win.select_next(self.matched_count as usize);
+                self.results = self
+                    .matcher
+                    .results(self.win.height as u32, self.win.offset as u32);
+                !self.exhausted
+                    && !self.loading_more
+                    && self
+                        .win
+                        .near_end(self.matched_count as usize, LAZY_LOAD_THRESHOLD)
+            }
             MailFocus::Folders => {
                 self.folder_win.select_next(self.folders.len());
                 false
@@ -191,6 +203,12 @@ impl MailScreen {
     pub fn select_prev(&mut self) {
         match self.focus {
             MailFocus::List => {
+                self.win.select_prev();
+                self.results = self
+                    .matcher
+                    .results(self.win.height as u32, self.win.offset as u32);
+            }
+            MailFocus::SearchResults => {
                 self.win.select_prev();
                 self.results = self
                     .matcher
@@ -235,6 +253,9 @@ impl MailScreen {
             MailFocus::List => {
                 self.render_list(frame, chunks[0], focused_chrome);
             }
+            MailFocus::SearchResults => {
+                self.render_search_results(frame, chunks[0], focused_chrome);
+            }
             MailFocus::Folders => {
                 self.render_folders(frame, chunks[0], focused_chrome);
             }
@@ -264,6 +285,34 @@ impl MailScreen {
             ),
             area,
         );
+    }
+
+    fn render_search_results(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
+        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let title = format!(" Search Results ({}) ", self.matched_count);
+
+        let items: Vec<ListItem> = self
+            .results
+            .iter()
+            .map(|entry| ListItem::new(highlighted_line("✉  ", &entry.matched_string, &entry.match_indices)))
+            .collect();
+
+        let mut state = ListState::default().with_selected(Some(self.win.cursor));
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border))
+                    .title(title),
+            )
+            .highlight_style(
+                Style::default()
+                    .fg(Color::White)
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("▶ ");
+        frame.render_stateful_widget(list, area, &mut state);
     }
 
     fn render_folders(&mut self, frame: &mut Frame, area: Rect, focused: bool) {

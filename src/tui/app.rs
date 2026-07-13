@@ -312,6 +312,7 @@ impl App {
                 if self.screen == Screen::Mail {
                     self.mail.focus = match self.mail.focus {
                         MailFocus::List => MailFocus::Folders,
+                        MailFocus::SearchResults => MailFocus::Folders,
                         MailFocus::Folders => MailFocus::Account,
                         MailFocus::Account => MailFocus::Folders,
                     };
@@ -321,6 +322,7 @@ impl App {
                 if self.screen == Screen::Mail {
                     self.mail.focus = match self.mail.focus {
                         MailFocus::List => MailFocus::Folders,
+                        MailFocus::SearchResults => MailFocus::Folders,
                         MailFocus::Folders => MailFocus::List,
                         MailFocus::Account => MailFocus::Folders,
                     };
@@ -335,7 +337,7 @@ impl App {
                     self.tooltip = Some(Tooltip::warn("no search on the calendar"));
                 } else {
                     if self.screen == Screen::Mail {
-                        self.mail.focus = MailFocus::List;
+                        self.mail.focus = MailFocus::SearchResults;
                     }
                     self.search_active = true;
                 }
@@ -352,7 +354,7 @@ impl App {
             }
             ClearInput => self.apply_query(""),
             SubmitInput => {
-                // commit: back to Normal with the first result selected
+                // commit: keep search results visible with first result selected
                 self.search_active = false;
                 if self.screen == Screen::Mail {
                     self.mail.win.reset();
@@ -363,6 +365,9 @@ impl App {
             }
             CancelSearch => {
                 self.search_active = false;
+                if self.screen == Screen::Mail {
+                    self.mail.focus = MailFocus::List;
+                }
                 self.apply_query("");
             }
 
@@ -499,6 +504,9 @@ impl App {
                 self.switch_screen(Screen::Mail);
             }
             Screen::Mail => match self.mail.focus {
+                MailFocus::SearchResults => {
+                    self.mail.focus = MailFocus::List;
+                }
                 MailFocus::List => {
                     if self.mail.is_inbox_active() {
                         self.quit_dialog = true;
@@ -562,6 +570,7 @@ impl App {
                     }
                 }
                 MailFocus::List => self.open_mail_popup(),
+                MailFocus::SearchResults => self.open_mail_popup(),
                 MailFocus::Account => {}, // Account view has no items to open
             },
             Screen::Contacts => {
