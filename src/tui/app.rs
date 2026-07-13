@@ -3,6 +3,7 @@
 //! only sends commands and consumes result events.
 
 use std::collections::HashMap;
+use std::time::{Instant, Duration};
 
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Rect;
@@ -71,6 +72,10 @@ pub struct App {
     profile: Profile,
     contacts_loaded: bool,
     events_loaded: bool,
+
+    /// Last search query and timestamp for cooldown-based deep search.
+    last_search_query: Option<String>,
+    last_search_time: Option<Instant>,
 }
 
 impl App {
@@ -112,6 +117,8 @@ impl App {
             profile,
             contacts_loaded: false,
             events_loaded: false,
+            last_search_query: None,
+            last_search_time: None,
         }
     }
 
@@ -465,13 +472,40 @@ impl App {
         match self.screen {
             Screen::Mail => {
                 if self.mail.set_query(query) {
+                    // Check if this is a repeat search within 1 second cooldown
+                    let now = Instant::now();
+                    let should_deep_search = if !query.is_empty() {
+                        self.last_search_query.as_deref() == Some(query)
+                            && self
+                                .last_search_time
+                                .map(|t| now.duration_since(t) < Duration::from_secs(1))
+                                .unwrap_or(false)
+                    } else {
+                        false
+                    };
+
                     // scope flipped: all-folder search ↔ single folder
                     let folder_id = if query.is_empty() {
                         self.mail.active_folder_id.clone()
-                    } else {
+                    } else if should_deep_search {
+                        // Second search of same query triggers deep search across all folders
                         None
+                    } else {
+                        // First search stays in current folder
+                        self.mail.active_folder_id.clone()
                     };
+
                     self.mail.all_folders = !query.is_empty();
+
+                    // Update cooldown tracking
+                    if !query.is_empty() {
+                        self.last_search_query = Some(query.to_string());
+                        self.last_search_time = Some(now);
+                    } else {
+                        self.last_search_query = None;
+                        self.last_search_time = None;
+                    }
+
                     self.send(Command::LoadMailPage {
                         folder_id,
                         position: 0,
