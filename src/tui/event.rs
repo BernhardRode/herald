@@ -1,9 +1,17 @@
-//! Terminal event handling — vi-style Normal/Insert/EmailOpen modes.
+//! Terminal event handling — context-based modes and key bindings.
 //!
-//! Three modes:
-//! - Normal: j/k navigate, h/l drill, Enter opens, / or i enters Insert, q quits
-//! - Insert: type to search (slash commands), Esc returns to Normal
-//! - EmailOpen: email is selected/open — r reply, f forward, a archive, d delete, Esc closes
+//! Modes:
+//! - **Normal**: list navigation and context actions. `j/k` move, `h/l` walk
+//!   the hierarchy, `Enter` opens, `/` searches, `Tab` switches Mail/Contacts/
+//!   Calendar, `c` creates (mail draft / contact / event depending on view),
+//!   `1`–`9`/`0` toggle popout overlays, `q` quits.
+//! - **Search**: typing filters the list; `/command` runs a slash command.
+//! - **Overlay**: a popout is focused. `Esc` minimizes it (all minimized →
+//!   back in the app), `x` discards it, `s` sends/saves, `i` edits, `Tab`
+//!   cycles focus, `m` maximizes, numbers toggle popouts.
+//! - **Editing**: typing goes into the focused popout's field or body.
+//!   `Tab`/`Enter` advance fields, `Esc` returns to Overlay.
+//! - **Confirm**: `y` confirms a destructive action, `n`/`Esc` cancels.
 
 use std::time::Duration;
 
@@ -18,54 +26,39 @@ pub fn poll_event(timeout: Duration) -> std::io::Result<Option<Event>> {
     }
 }
 
-/// A destructive mail action awaiting user confirmation.
+/// A destructive action awaiting user confirmation. Contains the JMAP id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfirmAction {
-    /// Delete an email (move to Trash). Contains the email JMAP id.
-    Delete(String),
-    /// Archive an email. Contains the email JMAP id.
-    Archive(String),
-    /// Mark an email as spam. Contains the email JMAP id.
-    Spam(String),
+    DeleteMail(String),
+    ArchiveMail(String),
+    SpamMail(String),
+    DeleteContact(String),
+    DeleteEvent(String),
 }
 
 impl ConfirmAction {
     /// Human-readable prompt for this action.
     pub fn prompt(&self) -> &'static str {
         match self {
-            ConfirmAction::Delete(_) => "Delete this email? [y/n]",
-            ConfirmAction::Archive(_) => "Archive this email? [y/n]",
-            ConfirmAction::Spam(_) => "Mark as spam? [y/n]",
-        }
-    }
-
-    /// The target folder name (used to resolve the JMAP action).
-    pub fn target_name(&self) -> &'static str {
-        match self {
-            ConfirmAction::Delete(_) => "delete",
-            ConfirmAction::Archive(_) => "archive",
-            ConfirmAction::Spam(_) => "spam",
-        }
-    }
-
-    /// The email id associated with this action.
-    pub fn email_id(&self) -> &str {
-        match self {
-            ConfirmAction::Delete(id) | ConfirmAction::Archive(id) | ConfirmAction::Spam(id) => id,
+            ConfirmAction::DeleteMail(_) => "Delete this email? [y/n]",
+            ConfirmAction::ArchiveMail(_) => "Archive this email? [y/n]",
+            ConfirmAction::SpamMail(_) => "Mark as spam? [y/n]",
+            ConfirmAction::DeleteContact(_) => "Delete this contact? [y/n]",
+            ConfirmAction::DeleteEvent(_) => "Delete this event? [y/n]",
         }
     }
 }
 
-/// Vi-style input mode.
+/// Input mode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMode {
-    /// Normal mode: navigation and structural commands.
+    /// List navigation and structural commands.
     Normal,
-    /// Insert mode: typing into search / slash commands.
-    Insert,
-    /// An email is open/selected — single-key actions available.
-    EmailOpen,
-    /// Editing a draft/reply/forward in a popout — text goes to the editor buffer.
+    /// Typing into the search bar / slash commands.
+    Search,
+    /// A popout overlay is focused — single-key actions apply to it.
+    Overlay,
+    /// Typing into the focused popout's field or body editor.
     Editing,
     /// Awaiting confirmation for a destructive action.
     Confirm(ConfirmAction),
@@ -74,25 +67,18 @@ pub enum InputMode {
 /// Actions that can result from a key press.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
-    /// Quit the application.
     Quit,
-    /// Move selection up in the results list.
     SelectPrev,
-    /// Move selection down in the results list.
     SelectNext,
-    /// Navigate deeper (enter a folder, open a mail, select a profile).
     NavigateRight,
-    /// Navigate back (from mails → folders → profiles).
     NavigateLeft,
-    /// Switch to the next top-level mode (Mail → Contacts → Calendar).
     SwitchModeNext,
-    /// Switch to the previous top-level mode.
     SwitchModePrev,
-    /// Enter Insert mode (start typing search/commands).
-    EnterInsert,
-    /// Return to Normal mode (from Insert or EmailOpen).
+    /// Enter Search mode.
+    EnterSearch,
+    /// Return to Normal mode.
     ExitToNormal,
-    /// Open/select the current item (Enter on an email → EmailOpen).
+    /// Open/select the current item.
     OpenItem,
     /// Append a character to the search input.
     InsertChar(char),
@@ -100,56 +86,50 @@ pub enum Action {
     Backspace,
     /// Clear the entire search input.
     ClearInput,
-    /// Execute the current input as a slash command (Enter in Insert mode with /...).
+    /// Execute the current input as a slash command (Enter in Search mode).
     ExecuteCommand,
-    // --- Email-open single-key actions ---
-    /// Reply to the open email.
+    // --- Context actions (Normal + Overlay) ---
+    /// Reply to the selected/open email.
     Reply,
-    /// Forward the open email.
+    /// Forward the selected/open email.
     Forward,
-    /// Archive the open email.
+    /// Archive the selected/open email.
     Archive,
-    /// Delete the open email.
+    /// Delete the selected item (email/contact/event, context-based).
     Delete,
-    /// Send the current draft/reply/forward.
-    Send,
-    /// Compose a new email.
-    Compose,
-    /// Mark as spam.
+    /// Mark the selected/open email as spam.
     Spam,
-    // --- Header editing (draft/reply/forward popout) ---
-    /// Edit the To field.
-    EditTo,
-    /// Edit the Subject field.
-    EditSubject,
-    /// Edit/add CC field.
-    EditCc,
-    /// Edit/add BCC field.
-    EditBcc,
-    // --- Popout actions ---
-    /// Close the focused popout.
-    PopoutClose,
-    /// Toggle maximize/normal on focused popout.
-    PopoutToggleMax,
-    /// Minimize the focused popout.
-    PopoutMinimize,
-    /// Switch focus between popouts.
-    PopoutSwitchFocus,
-    // --- Editor actions (Editing mode) ---
-    /// Insert a character into the editor buffer.
+    /// Create something new — mail draft / contact / event, context-based.
+    Create,
+    // --- Overlay actions ---
+    /// Send/save the focused popout (mail send, contact/event create).
+    Send,
+    /// Toggle popout N (0-based index; key `1` → 0, key `0` → 9).
+    TogglePopout(usize),
+    /// Minimize the focused popout (Esc — all minimized returns to the app).
+    MinimizeOverlay,
+    /// Discard/close the focused popout.
+    CloseOverlay,
+    /// Toggle maximize on the focused popout.
+    ToggleMaximize,
+    /// Cycle focus between active popouts.
+    FocusNextPopout,
+    /// Start editing the focused popout (first field / body).
+    EditPopout,
+    // --- Editing actions ---
     EditorChar(char),
-    /// Delete last character in editor.
     EditorBackspace,
-    /// Insert newline in editor.
-    EditorNewline,
-    /// Escape from editing: save draft and return to EmailOpen.
+    /// Enter: next field (on a field) or newline (in the body).
+    EditorEnter,
+    /// Tab: advance to the next field.
+    EditorNextField,
+    /// Esc: stop editing, back to Overlay.
     EditorEscape,
+    // --- Confirm actions ---
+    ConfirmYes,
+    ConfirmNo,
     /// No-op (unhandled key).
     None,
-    /// Confirm the pending destructive action.
-    ConfirmYes,
-    /// Cancel the pending destructive action.
-    ConfirmNo,
 }
 
 /// Map a key event to an action based on the current input mode.
@@ -168,332 +148,172 @@ pub fn map_key(key: KeyEvent, mode: &InputMode) -> Action {
 
     match mode {
         InputMode::Normal => map_normal(key),
-        InputMode::Insert => map_insert(key),
-        InputMode::EmailOpen => map_email_open(key),
+        InputMode::Search => map_search(key),
+        InputMode::Overlay => map_overlay(key),
         InputMode::Editing => map_editing(key),
         InputMode::Confirm(_) => map_confirm(key),
     }
 }
 
-/// Normal mode: navigation, drill, open, search entry.
+/// Map a digit key to a 0-based popout index (`1`→0 … `9`→8, `0`→9).
+fn popout_index(c: char) -> Option<usize> {
+    match c {
+        '1'..='9' => Some(c as usize - '1' as usize),
+        '0' => Some(9),
+        _ => None,
+    }
+}
+
+/// Normal mode: navigation, context actions, popout toggles.
 fn map_normal(key: KeyEvent) -> Action {
-    match key {
-        // Quit
-        KeyEvent {
-            code: KeyCode::Char('q'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Esc, ..
-        } => Action::Quit,
-
-        // Navigation: j/k or arrows
-        KeyEvent {
-            code: KeyCode::Char('k'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Up, ..
-        } => Action::SelectPrev,
-        KeyEvent {
-            code: KeyCode::Char('j'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Down,
-            ..
-        } => Action::SelectNext,
-
-        // Drill: h/l or arrows
-        KeyEvent {
-            code: KeyCode::Char('h'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Left,
-            ..
-        } => Action::NavigateLeft,
-        KeyEvent {
-            code: KeyCode::Char('l'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Right,
-            ..
-        } => Action::NavigateRight,
-
-        // Open item (Enter)
-        KeyEvent {
-            code: KeyCode::Enter,
-            ..
-        } => Action::OpenItem,
-
-        // Tab switching
-        KeyEvent {
-            code: KeyCode::Tab, ..
-        } => Action::SwitchModeNext,
-        KeyEvent {
-            code: KeyCode::BackTab,
-            ..
-        } => Action::SwitchModePrev,
-
-        // Enter Insert mode: / or i
-        KeyEvent {
-            code: KeyCode::Char('/'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EnterInsert,
-        KeyEvent {
-            code: KeyCode::Char('i'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EnterInsert,
-
-        // Direct mail actions from list view (context-aware in app.rs)
-        KeyEvent {
-            code: KeyCode::Char('r'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Reply,
-        KeyEvent {
-            code: KeyCode::Char('f'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Forward,
-        KeyEvent {
-            code: KeyCode::Char('a'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Archive,
-        KeyEvent {
-            code: KeyCode::Char('d'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Delete,
-        KeyEvent {
-            code: KeyCode::Char('s'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Spam,
-        KeyEvent {
-            code: KeyCode::Char('c'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Compose,
-
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return Action::None;
+    }
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => Action::Quit,
+        KeyCode::Char('k') | KeyCode::Up => Action::SelectPrev,
+        KeyCode::Char('j') | KeyCode::Down => Action::SelectNext,
+        KeyCode::Char('h') | KeyCode::Left => Action::NavigateLeft,
+        KeyCode::Char('l') | KeyCode::Right => Action::NavigateRight,
+        KeyCode::Enter => Action::OpenItem,
+        KeyCode::Tab => Action::SwitchModeNext,
+        KeyCode::BackTab => Action::SwitchModePrev,
+        KeyCode::Char('/') | KeyCode::Char('i') => Action::EnterSearch,
+        KeyCode::Char('c') => Action::Create,
+        KeyCode::Char('r') => Action::Reply,
+        KeyCode::Char('f') => Action::Forward,
+        KeyCode::Char('a') => Action::Archive,
+        KeyCode::Char('d') => Action::Delete,
+        KeyCode::Char('s') => Action::Spam,
+        KeyCode::Char(c) => popout_index(c)
+            .map(Action::TogglePopout)
+            .unwrap_or(Action::None),
         _ => Action::None,
     }
 }
 
-/// Insert mode: type to search, slash commands, Esc exits.
-fn map_insert(key: KeyEvent) -> Action {
-    match key {
-        // Exit Insert mode
-        KeyEvent {
-            code: KeyCode::Esc, ..
-        } => Action::ExitToNormal,
-
-        // Navigation still works with arrows
-        KeyEvent {
-            code: KeyCode::Up, ..
-        } => Action::SelectPrev,
-        KeyEvent {
-            code: KeyCode::Down,
-            ..
-        } => Action::SelectNext,
-
-        // Enter: execute command if starts with /, otherwise open item
-        KeyEvent {
-            code: KeyCode::Enter,
-            ..
-        } => Action::ExecuteCommand,
-
-        // Editing
-        KeyEvent {
-            code: KeyCode::Backspace,
-            ..
-        } => Action::Backspace,
-        KeyEvent {
-            code: KeyCode::Char('u'),
-            modifiers: KeyModifiers::CONTROL,
-            ..
-        } => Action::ClearInput,
-
-        // Character input
-        KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            ..
-        } => Action::InsertChar(c),
-
+/// Search mode: type to filter, slash commands, Esc exits.
+fn map_search(key: KeyEvent) -> Action {
+    match key.code {
+        KeyCode::Esc => Action::ExitToNormal,
+        KeyCode::Up => Action::SelectPrev,
+        KeyCode::Down => Action::SelectNext,
+        KeyCode::Enter => Action::ExecuteCommand,
+        KeyCode::Backspace => Action::Backspace,
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::ClearInput,
+        KeyCode::Char(c) if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT => {
+            Action::InsertChar(c)
+        }
         _ => Action::None,
     }
 }
 
-/// EmailOpen mode: single-key actions on the open email/draft.
-fn map_email_open(key: KeyEvent) -> Action {
-    match key {
-        // Close popout (back to list)
-        KeyEvent {
-            code: KeyCode::Esc, ..
-        }
-        | KeyEvent {
-            code: KeyCode::Char('q'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::PopoutClose,
-
-        // Email/draft actions
-        KeyEvent {
-            code: KeyCode::Char('r'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Reply,
-        KeyEvent {
-            code: KeyCode::Char('f'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Forward,
-        KeyEvent {
-            code: KeyCode::Char('a'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Archive,
-        KeyEvent {
-            code: KeyCode::Char('d'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Delete,
-        KeyEvent {
-            code: KeyCode::Char('s'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::Send,
-
-        // Header editing (for drafts/replies/forwards)
-        KeyEvent {
-            code: KeyCode::Char('t'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EditTo,
-        KeyEvent {
-            code: KeyCode::Char('u'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EditSubject,
-        KeyEvent {
-            code: KeyCode::Char('c'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EditCc,
-        KeyEvent {
-            code: KeyCode::Char('b'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EditBcc,
-
-        // Popout window management
-        KeyEvent {
-            code: KeyCode::Char('m'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::PopoutToggleMax,
-        KeyEvent {
-            code: KeyCode::Char('n'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::PopoutMinimize,
-        KeyEvent {
-            code: KeyCode::Tab, ..
-        } => Action::PopoutSwitchFocus,
-
-        // Re-enter editing mode
-        KeyEvent {
-            code: KeyCode::Char('i'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Char('e'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        } => Action::EnterInsert,
-
-        // Scroll within the email
-        KeyEvent {
-            code: KeyCode::Char('j'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Down,
-            ..
-        } => Action::SelectNext,
-        KeyEvent {
-            code: KeyCode::Char('k'),
-            modifiers: KeyModifiers::NONE,
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Up, ..
-        } => Action::SelectPrev,
-
+/// Overlay mode: single-key actions on the focused popout.
+fn map_overlay(key: KeyEvent) -> Action {
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return Action::None;
+    }
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('n') => Action::MinimizeOverlay,
+        KeyCode::Char('x') | KeyCode::Char('q') => Action::CloseOverlay,
+        KeyCode::Char('s') => Action::Send,
+        KeyCode::Char('i') | KeyCode::Char('e') | KeyCode::Enter => Action::EditPopout,
+        KeyCode::Char('r') => Action::Reply,
+        KeyCode::Char('f') => Action::Forward,
+        KeyCode::Char('a') => Action::Archive,
+        KeyCode::Char('d') => Action::Delete,
+        KeyCode::Char('m') => Action::ToggleMaximize,
+        KeyCode::Tab => Action::FocusNextPopout,
+        KeyCode::Char(c) => popout_index(c)
+            .map(Action::TogglePopout)
+            .unwrap_or(Action::None),
         _ => Action::None,
     }
 }
 
-/// Editing mode: typing into the editor buffer (compose/reply/forward).
-/// Esc saves draft and returns to EmailOpen view.
+/// Editing mode: typing into the focused popout.
 fn map_editing(key: KeyEvent) -> Action {
-    match key {
-        // Escape: save draft, exit to EmailOpen
-        KeyEvent {
-            code: KeyCode::Esc, ..
-        } => Action::EditorEscape,
-
-        // Newline
-        KeyEvent {
-            code: KeyCode::Enter,
-            ..
-        } => Action::EditorNewline,
-
-        // Editing
-        KeyEvent {
-            code: KeyCode::Backspace,
-            ..
-        } => Action::EditorBackspace,
-
-        // Character input
-        KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-            ..
-        } => Action::EditorChar(c),
-
+    match key.code {
+        KeyCode::Esc => Action::EditorEscape,
+        KeyCode::Enter => Action::EditorEnter,
+        KeyCode::Tab => Action::EditorNextField,
+        KeyCode::Backspace => Action::EditorBackspace,
+        KeyCode::Char(c) if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT => {
+            Action::EditorChar(c)
+        }
         _ => Action::None,
     }
 }
 
-/// Confirm mode: awaiting y/n response for a destructive action.
-/// Only y confirms, n/Esc cancels, everything else is ignored.
+/// Confirm mode: y confirms, n/Esc cancels, everything else is ignored.
 fn map_confirm(key: KeyEvent) -> Action {
-    match key {
-        KeyEvent {
-            code: KeyCode::Char('y') | KeyCode::Char('Y'),
-            ..
-        } => Action::ConfirmYes,
-        KeyEvent {
-            code: KeyCode::Char('n') | KeyCode::Char('N'),
-            ..
-        }
-        | KeyEvent {
-            code: KeyCode::Esc, ..
-        } => Action::ConfirmNo,
+    match key.code {
+        KeyCode::Char('y') | KeyCode::Char('Y') => Action::ConfirmYes,
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => Action::ConfirmNo,
         _ => Action::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn number_keys_toggle_popouts_in_normal_and_overlay() {
+        for mode in [InputMode::Normal, InputMode::Overlay] {
+            assert_eq!(
+                map_key(key(KeyCode::Char('1')), &mode),
+                Action::TogglePopout(0)
+            );
+            assert_eq!(
+                map_key(key(KeyCode::Char('9')), &mode),
+                Action::TogglePopout(8)
+            );
+            assert_eq!(
+                map_key(key(KeyCode::Char('0')), &mode),
+                Action::TogglePopout(9)
+            );
+        }
+    }
+
+    #[test]
+    fn number_keys_type_into_search() {
+        assert_eq!(
+            map_key(key(KeyCode::Char('1')), &InputMode::Search),
+            Action::InsertChar('1')
+        );
+    }
+
+    #[test]
+    fn create_is_context_neutral() {
+        assert_eq!(
+            map_key(key(KeyCode::Char('c')), &InputMode::Normal),
+            Action::Create
+        );
+    }
+
+    #[test]
+    fn overlay_esc_minimizes_x_closes() {
+        assert_eq!(
+            map_key(key(KeyCode::Esc), &InputMode::Overlay),
+            Action::MinimizeOverlay
+        );
+        assert_eq!(
+            map_key(key(KeyCode::Char('x')), &InputMode::Overlay),
+            Action::CloseOverlay
+        );
+    }
+
+    #[test]
+    fn confirm_only_accepts_y_n_esc() {
+        let mode = InputMode::Confirm(ConfirmAction::DeleteMail("id".into()));
+        assert_eq!(map_key(key(KeyCode::Char('y')), &mode), Action::ConfirmYes);
+        assert_eq!(map_key(key(KeyCode::Char('n')), &mode), Action::ConfirmNo);
+        assert_eq!(map_key(key(KeyCode::Esc), &mode), Action::ConfirmNo);
+        assert_eq!(map_key(key(KeyCode::Char('d')), &mode), Action::None);
     }
 }

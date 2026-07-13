@@ -1,10 +1,10 @@
-//! Split-pane layout computation with popout support.
+//! Frame layout: full-size main app, popout overlays on top, popout bar.
 //!
-//! Layout modes:
-//! - No popouts: standard split (results+input left, preview right)
-//! - 1 normal popout: main shrinks to left half, popout takes right half
-//! - 2 normal popouts: main hidden, two popouts side-by-side
-//! - 1 maximized popout: full overlay
+//! The main app (results + input + preview) always occupies the full frame.
+//! Active popouts are drawn as centered overlays: one popout covers most of
+//! the screen, two are shown side by side, a maximized popout covers the whole
+//! main area. When any popouts exist, a one-line popout bar sits above the
+//! status bar.
 
 use ratatui::layout::{Constraint, Direction, Layout as RatatuiLayout, Rect};
 
@@ -15,138 +15,95 @@ pub struct Layout {
     pub results: Rect,
     /// The input/search bar area (left panel, below results).
     pub input: Rect,
-    /// The preview pane area (right panel) — None if popouts cover it.
-    pub preview: Option<Rect>,
+    /// The preview pane area (right panel).
+    pub preview: Rect,
     /// Status bar at the very bottom.
     pub status_bar: Rect,
-    /// Popout panel areas (0, 1, or 2).
+    /// Overlay areas for the active popouts (0, 1, or 2).
     pub popout_areas: Vec<Rect>,
-    /// Minimized popout tab bar area (above status bar, if any minimized).
-    pub minimized_bar: Option<Rect>,
+    /// Popout bar (above status bar) — present when any popouts are open.
+    pub popout_bar: Option<Rect>,
 }
 
 /// Height of the input bar.
 const INPUT_BAR_HEIGHT: u16 = 3;
 /// Default preview panel size percentage.
 const PREVIEW_PANEL_PERCENT: u16 = 50;
+/// Overlay size as a percentage of the main area.
+const OVERLAY_PERCENT: u16 = 88;
 
 impl Layout {
-    /// Build layout based on number of visible popouts and their state.
+    /// Build the frame layout.
     pub fn build(
         area: Rect,
-        visible_popout_count: usize,
+        active_popout_count: usize,
         has_maximized: bool,
-        has_minimized: bool,
+        has_popouts: bool,
     ) -> Self {
-        // Reserve status bar (1 line) and optional minimized bar (1 line)
-        let minimized_height = if has_minimized { 1 } else { 0 };
-        let [main_area, minimized_bar_area, status_bar] = RatatuiLayout::vertical([
+        let popout_bar_height = if has_popouts { 1 } else { 0 };
+        let [main_area, popout_bar_area, status_bar] = RatatuiLayout::vertical([
             Constraint::Min(0),
-            Constraint::Length(minimized_height),
+            Constraint::Length(popout_bar_height),
             Constraint::Length(1),
         ])
         .areas(area);
 
-        let minimized_bar = if has_minimized {
-            Some(minimized_bar_area)
+        let popout_bar = has_popouts.then_some(popout_bar_area);
+
+        // Main app: results+input | preview
+        let [left_panel, preview] = RatatuiLayout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(100 - PREVIEW_PANEL_PERCENT),
+                Constraint::Percentage(PREVIEW_PANEL_PERCENT),
+            ])
+            .areas(main_area);
+
+        let [results, input] =
+            RatatuiLayout::vertical([Constraint::Min(3), Constraint::Length(INPUT_BAR_HEIGHT)])
+                .areas(left_panel);
+
+        let popout_areas = if has_maximized {
+            vec![main_area]
         } else {
-            None
+            overlay_areas(main_area, active_popout_count)
         };
 
-        // If a popout is maximized, it takes the full main area
-        if has_maximized {
-            // Main view is hidden; show only the maximized popout(s)
-            let (results, input) = empty_left_panel(main_area);
-            return Self {
-                results,
-                input,
-                preview: None,
-                status_bar,
-                popout_areas: vec![main_area],
-                minimized_bar,
-            };
-        }
-
-        match visible_popout_count {
-            0 => {
-                // Standard layout: results+input | preview
-                let [left_panel, preview] = RatatuiLayout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([
-                        Constraint::Percentage(100 - PREVIEW_PANEL_PERCENT),
-                        Constraint::Percentage(PREVIEW_PANEL_PERCENT),
-                    ])
-                    .areas(main_area);
-
-                let [results, input] = RatatuiLayout::vertical([
-                    Constraint::Min(3),
-                    Constraint::Length(INPUT_BAR_HEIGHT),
-                ])
-                .areas(left_panel);
-
-                Self {
-                    results,
-                    input,
-                    preview: Some(preview),
-                    status_bar,
-                    popout_areas: vec![],
-                    minimized_bar,
-                }
-            }
-            1 => {
-                // Main (results+input) on left 40%, popout on right 60%
-                let [left_panel, popout_area] = RatatuiLayout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-                    .areas(main_area);
-
-                let [results, input] = RatatuiLayout::vertical([
-                    Constraint::Min(3),
-                    Constraint::Length(INPUT_BAR_HEIGHT),
-                ])
-                .areas(left_panel);
-
-                Self {
-                    results,
-                    input,
-                    preview: None,
-                    status_bar,
-                    popout_areas: vec![popout_area],
-                    minimized_bar,
-                }
-            }
-            _ => {
-                // 2 popouts side-by-side, main list compressed to narrow strip
-                let [list_strip, pop1, pop2] = RatatuiLayout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([
-                        Constraint::Percentage(20),
-                        Constraint::Percentage(40),
-                        Constraint::Percentage(40),
-                    ])
-                    .areas(main_area);
-
-                let [results, input] = RatatuiLayout::vertical([
-                    Constraint::Min(3),
-                    Constraint::Length(INPUT_BAR_HEIGHT),
-                ])
-                .areas(list_strip);
-
-                Self {
-                    results,
-                    input,
-                    preview: None,
-                    status_bar,
-                    popout_areas: vec![pop1, pop2],
-                    minimized_bar,
-                }
-            }
+        Self {
+            results,
+            input,
+            preview,
+            status_bar,
+            popout_areas,
+            popout_bar,
         }
     }
 }
 
-/// Create empty zero-height rects for the left panel when it's hidden.
-fn empty_left_panel(area: Rect) -> (Rect, Rect) {
-    let zero = Rect::new(area.x, area.y, 0, 0);
-    (zero, zero)
+/// Compute centered overlay rects for the active popouts.
+fn overlay_areas(main: Rect, count: usize) -> Vec<Rect> {
+    match count {
+        0 => vec![],
+        1 => vec![centered(main, OVERLAY_PERCENT, OVERLAY_PERCENT)],
+        _ => {
+            let overlay = centered(main, 96, OVERLAY_PERCENT);
+            let [left, right] = RatatuiLayout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .areas(overlay);
+            vec![left, right]
+        }
+    }
+}
+
+/// A rect centered inside `area` covering the given percentages.
+fn centered(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let width = area.width * percent_x / 100;
+    let height = area.height * percent_y / 100;
+    Rect::new(
+        area.x + (area.width.saturating_sub(width)) / 2,
+        area.y + (area.height.saturating_sub(height)) / 2,
+        width,
+        height,
+    )
 }

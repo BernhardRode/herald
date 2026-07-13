@@ -1,35 +1,48 @@
 //! Terminal User Interface for Herald.
 //!
-//! Implements a television-style split-pane fuzzy search interface:
-//! - Left panel: results list with fuzzy search input bar
-//! - Right panel: preview of the selected item
+//! A television-style split-pane fuzzy search interface (nucleo-powered):
+//! results list + search bar on the left, preview on the right. Opened emails
+//! and create-forms (draft / contact / event) appear as numbered popout
+//! overlays managed from the popout bar.
 //!
-//! Hierarchical navigation: Profiles → Folders → Mails
-//! Arrow left goes back, Arrow right / Enter enters.
-//!
-//! Uses nucleo for high-performance fuzzy matching.
+//! Module map:
+//! - [`state`] — the `App` struct, modes, panels, pending server actions
+//! - [`actions`] — keyboard action handling (impl blocks on `App`)
+//! - [`data`] — JMAP fetches and execution of pending actions
+//! - [`editor`] — popout field/body editing and cursor math
+//! - [`entries`] — list entry types and display formatting
+//! - [`event`] — key → action mapping per input mode
+//! - [`popout`] — the popout overlay system
+//! - [`render`] — frame composition
+//! - [`search`] — nucleo fuzzy matcher wrapper
+//! - [`ui`] — main-panel widgets (results, input, preview, layout)
 //!
 //! # Security: Terminal output sanitization
 //!
-//! All server-supplied content (email subjects, sender names, body text, contact
-//! names, calendar titles) is rendered exclusively through ratatui widgets
-//! (`Paragraph`, `List`, `Line`, `Span`). Ratatui's cell-based rendering via
-//! crossterm does not pass raw strings to the terminal — each character is
-//! written into a screen buffer cell, preventing ANSI escape injection.
+//! All server-supplied content (email subjects, sender names, body text,
+//! contact names, calendar titles) is rendered exclusively through ratatui
+//! widgets (`Paragraph`, `List`, `Line`, `Span`). Ratatui's cell-based
+//! rendering via crossterm does not pass raw strings to the terminal — each
+//! character is written into a screen buffer cell, preventing ANSI escape
+//! injection.
 //!
 //! There are **no** raw `println!`, `eprintln!`, `print!`, or direct
-//! stdout/stderr writes of server-controlled data in this module. Therefore
-//! manual `sanitize_display()` calls are not required here.
-//!
-//! If raw terminal output paths are added in the future (e.g., post-TUI debug
-//! prints, error messages after `ratatui::restore()`), they MUST use
-//! `crate::sanitize::sanitize_display()` before printing any server-supplied
+//! stdout/stderr writes of server-controlled data in this module. If raw
+//! terminal output paths are added in the future (e.g., post-TUI debug prints,
+//! error messages after `ratatui::restore()`), they MUST use
+//! `crate::text::sanitize_display()` before printing any server-supplied
 //! strings.
 
+mod actions;
 mod app;
+mod data;
+mod editor;
+mod entries;
 mod event;
-pub mod popout;
+mod popout;
+mod render;
 mod search;
+mod state;
 mod ui;
 
 use crate::config::Config;
