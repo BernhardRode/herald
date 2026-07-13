@@ -1,0 +1,44 @@
+# Maintainer: Bernhard Rode <bernhard at rode dot cc>
+pkgname=herald-jmap-cli-bin
+pkgver=0.1.1
+pkgrel=1
+pkgdesc="An opinionated JMAP CLI for Stalwart Mail Server"
+arch=('x86_64' 'aarch64')
+url="https://github.com/BernhardRode/herald"
+license=('MIT' 'Apache-2.0')
+provides=('herald')
+conflicts=('herald' 'herald-jmap-cli-git')
+depends=('gcc-libs')
+options=('!strip')
+
+_base_url="https://github.com/BernhardRode/herald/releases/download/v${pkgver}"
+
+source_x86_64=("${_base_url}/herald-jmap-cli-v${pkgver}-x86_64-unknown-linux-gnu.tar.xz")
+source_aarch64=("${_base_url}/herald-jmap-cli-v${pkgver}-aarch64-unknown-linux-gnu.tar.xz")
+
+# Updated by CI on release — run updpkgsums or use the checksums from the GitHub Release
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+    cd "${srcdir}"
+
+    # cargo-dist extracts to a directory named after the archive
+    local _dir
+    case "${CARCH}" in
+        x86_64)  _dir="herald-jmap-cli-v${pkgver}-x86_64-unknown-linux-gnu" ;;
+        aarch64) _dir="herald-jmap-cli-v${pkgver}-aarch64-unknown-linux-gnu" ;;
+    esac
+
+    install -Dm755 "${_dir}/herald" "${pkgdir}/usr/bin/herald"
+
+    # Install license from upstream repo (included in archive by cargo-dist)
+    if [[ -f "${_dir}/LICENSE" ]]; then
+        install -Dm644 "${_dir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    fi
+
+    # Install README if present
+    if [[ -f "${_dir}/README.md" ]]; then
+        install -Dm644 "${_dir}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    fi
+}
