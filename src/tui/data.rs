@@ -10,6 +10,47 @@ use crate::jmap::{self, JmapResult};
 use super::entries::{CalendarEventEntry, ContactEntry, FolderEntry, MailEntry};
 use super::state::{App, Panel, PendingAction};
 
+/// Resolve a folder ID using the standard resolution order:
+/// defaults (name) → role-tagged → config override.
+///
+/// Returns `Some(id)` if found, `None` otherwise.
+fn resolve_folder_id(
+    folders: &[FolderEntry],
+    config_override: Option<&str>,
+    role: &str,
+    default_name: &str,
+) -> Option<String> {
+    if let Some(configured) = config_override {
+        // Highest priority: explicit config name/path
+        resolve_folder_path(folders, configured)
+    } else if let Some(f) = folders.iter().find(|f| f.role.as_deref() == Some(role)) {
+        // Middle: JMAP role
+        Some(f.id.clone())
+    } else {
+        // Lowest: hardcoded default name
+        resolve_folder_path(folders, default_name)
+    }
+}
+
+/// Resolve a folder by name or path (e.g. "Archive" or "Archive/2026").
+fn resolve_folder_path(folders: &[FolderEntry], path: &str) -> Option<String> {
+    if !path.contains('/') {
+        return folders.iter().find(|f| f.name == path).map(|f| f.id.clone());
+    }
+    let segments: Vec<&str> = path.split('/').collect();
+    let mut current_parent_id: Option<String> = None;
+    for (i, segment) in segments.iter().enumerate() {
+        let f = folders.iter().find(|f| {
+            f.name == *segment && f.parent_id.as_deref() == current_parent_id.as_deref()
+        })?;
+        if i == segments.len() - 1 {
+            return Some(f.id.clone());
+        }
+        current_parent_id = Some(f.id.clone());
+    }
+    None
+}
+
 /// Load data from JMAP for the current panel.
 pub async fn load_data_for_panel(app: &mut App) {
     app.loading = true;
@@ -169,6 +210,15 @@ async fn execute_one(app: &App, action: &PendingAction) -> JmapResult<String> {
                 .as_deref()
                 .ok_or("set from_email in the profile to send mail")?;
             let from_name = profile.from_name.as_deref().unwrap_or("");
+
+            // Resolve sent folder: config override > role > default
+            let sent_mailbox_id = resolve_folder_id(
+                &app.folders,
+                profile.folders.sent.as_deref(),
+                "sent",
+                "Sent",
+            );
+
             jmap::mail::send_message(
                 client,
                 &jmap::mail::OutgoingMail {
@@ -180,6 +230,7 @@ async fn execute_one(app: &App, action: &PendingAction) -> JmapResult<String> {
                     subject,
                     body,
                 },
+                sent_mailbox_id.as_deref(),
             )
             .await?;
             Ok("✓ Email sent".to_string())
