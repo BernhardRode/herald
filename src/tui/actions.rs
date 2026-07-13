@@ -441,24 +441,49 @@ impl App {
     }
 
     /// Build a mail move for a named target (folder resolved from config).
+    ///
+    /// Resolution order:
+    /// 1. Hardcoded default name ("Archive", "Junk", "Trash")
+    /// 2. Server folder with the matching JMAP role (overrides default)
+    /// 3. Explicit config value (highest priority, overrides role)
     fn mail_move_action(&mut self, email_id: &str, target: &str) -> Option<PendingAction> {
         let profile = self.config.profiles.get(&self.active_profile_name);
-        let target_folder_name = match target {
-            "archive" => profile
-                .and_then(|p| p.folders.archive.as_deref())
-                .unwrap_or("Archive"),
-            "spam" => profile
-                .and_then(|p| p.folders.spam.as_deref())
-                .unwrap_or("Junk"),
-            "delete" | "trash" => profile
-                .and_then(|p| p.folders.trash.as_deref())
-                .unwrap_or("Trash"),
+
+        // Map action name → (config override, JMAP role, default name)
+        let (config_value, role, default_name) = match target {
+            "archive" => (
+                profile.and_then(|p| p.folders.archive.as_deref()),
+                "archive",
+                "Archive",
+            ),
+            "spam" => (
+                profile.and_then(|p| p.folders.spam.as_deref()),
+                "junk",
+                "Junk",
+            ),
+            "delete" | "trash" => (
+                profile.and_then(|p| p.folders.trash.as_deref()),
+                "trash",
+                "Trash",
+            ),
             _ => return None,
         };
 
-        let target_folder_id = self.resolve_folder_path(target_folder_name);
+        // Resolution: config override > role > default name
+        let target_folder_id = if let Some(configured_name) = config_value {
+            // Highest priority: explicit config path/name
+            self.resolve_folder_path(configured_name)
+        } else if let Some(f) = self.folders.iter().find(|f| f.role.as_deref() == Some(role)) {
+            // Middle: server-assigned JMAP role
+            Some(f.id.clone())
+        } else {
+            // Lowest: hardcoded default name
+            self.resolve_folder_path(default_name)
+        };
+
         let Some(target_folder_id) = target_folder_id else {
-            self.status_message = Some(format!("Folder not found: {target_folder_name}"));
+            let hint = config_value.unwrap_or(default_name);
+            self.status_message = Some(format!("Folder not found: {hint}"));
             return None;
         };
 
