@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::app::App;
+use crate::tui::state::App;
 
 /// Draw the preview pane on the right side.
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {

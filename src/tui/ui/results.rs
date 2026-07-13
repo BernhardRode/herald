@@ -8,11 +8,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::app::{App, Panel};
+use crate::tui::state::{App, Panel};
 
 /// Draw the results list with highlighted matches.
 pub fn draw(frame: &mut Frame, app: &mut App, area: Rect) {
-    let title = format!(" {} ", app.panel.title());
+    let title = format!(" {} ", app.results_title());
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray))
