@@ -310,12 +310,20 @@ impl App {
 
             FocusLeft => {
                 if self.screen == Screen::Mail {
-                    self.mail.focus = MailFocus::Folders;
+                    self.mail.focus = match self.mail.focus {
+                        MailFocus::List => MailFocus::Account,
+                        MailFocus::Folders => MailFocus::Account,
+                        MailFocus::Account => MailFocus::List,
+                    };
                 }
             }
             FocusRight => {
                 if self.screen == Screen::Mail {
-                    self.mail.focus = MailFocus::List;
+                    self.mail.focus = match self.mail.focus {
+                        MailFocus::List => MailFocus::Folders,
+                        MailFocus::Folders => MailFocus::List,
+                        MailFocus::Account => MailFocus::List,
+                    };
                 }
             }
 
@@ -501,7 +509,10 @@ impl App {
                         }
                     }
                 }
-                MailFocus::Folders => self.open_inbox(),
+                MailFocus::Folders => {
+                    self.mail.focus = MailFocus::Account;
+                }
+                MailFocus::Account => self.open_inbox(),
             },
         }
     }
@@ -545,6 +556,7 @@ impl App {
                     }
                 }
                 MailFocus::List => self.open_mail_popup(),
+                MailFocus::Account => {}, // Account view has no items to open
             },
             Screen::Contacts => {
                 if let Some(c) = self.contacts.selected() {
@@ -1214,7 +1226,11 @@ mod tests {
         app.handle_command(Command::Escape);
         assert_eq!(app.mail.focus, MailFocus::Folders);
 
-        // folder focus → Esc → inbox active + list focus
+        // folder focus → Esc → account focus
+        app.handle_command(Command::Escape);
+        assert_eq!(app.mail.focus, MailFocus::Account);
+
+        // account focus → Esc → inbox active + list focus
         app.handle_command(Command::Escape);
         assert_eq!(app.mail.active_folder_id.as_deref(), Some("in"));
         assert_eq!(app.mail.focus, MailFocus::List);
