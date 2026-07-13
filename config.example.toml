@@ -30,10 +30,12 @@ username = "you@example.com"
 password = "your-app-password"
 
 # Folder mappings for mail actions (names must match your server's mailboxes)
+# Use "Name" for flat folders, or "Parent/Child" for nested paths
 [profiles.default.folders]
-# archive = "Archive"
-# spam = "Junk"
-# trash = "Trash"
+# sent = "Sent Messages"
+# archive = "Archive/2026"
+# spam = "Junk Mail"
+# trash = "Deleted Messages"
 
 # ─── Alternative auth methods ───────────────────────────────────────
 #

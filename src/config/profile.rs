@@ -81,6 +81,9 @@ fn default_true() -> bool {
 /// Configurable folder mappings for mail actions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FolderMappings {
+    /// Mailbox name/path for sent items (default: "Sent")
+    #[serde(default)]
+    pub sent: Option<String>,
     /// Mailbox name/path for archiving (default: "Archive")
     #[serde(default)]
     pub archive: Option<String>,
