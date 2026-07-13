@@ -1,0 +1,69 @@
+# Herald CLI Configuration
+# Location: ~/.config/herald/config.toml
+# Generate this file: herald config init
+# Print this template: herald config env
+
+default_profile = "default"
+
+# ─── Profile: default ───────────────────────────────────────────────
+
+[profiles.default]
+server_url = "https://mail.example.com"
+from_email = "you@example.com"
+from_name = "Your Name"
+
+# Compose format: "plain" (default) or "markdown" (converts to HTML)
+# compose_format = "plain"
+
+# Email signature appended to new messages and replies
+# signature = "-- \nSent with Herald"
+
+# Skip y/n confirmation for delete, archive, and spam actions
+# confirm_actions = true
+
+# Allow non-HTTPS server URLs (for local development only)
+# allow_insecure = false
+
+[profiles.default.auth]
+method = "app-password"
+username = "you@example.com"
+password = "your-app-password"
+
+# Folder mappings for mail actions (names must match your server's mailboxes)
+[profiles.default.folders]
+# archive = "Archive"
+# spam = "Junk"
+# trash = "Trash"
+
+# ─── Alternative auth methods ───────────────────────────────────────
+#
+# API key:
+# [profiles.default.auth]
+# method = "api-key"
+# token = "your-api-key"
+#
+# OAuth browser flow (Authorization Code + PKCE):
+# [profiles.default.auth]
+# method = "oauth-browser"
+# client_id = "herald"
+#
+# OAuth device flow:
+# [profiles.default.auth]
+# method = "oauth-device"
+# client_id = "herald"
+
+# ─── Multiple profiles ──────────────────────────────────────────────
+#
+# [profiles.work]
+# server_url = "https://mail.company.com"
+# from_email = "you@company.com"
+# from_name = "Your Name"
+# confirm_actions = false
+#
+# [profiles.work.auth]
+# method = "oauth-browser"
+# client_id = "herald"
+#
+# [profiles.work.folders]
+# archive = "Archive/2026"
+# trash = "Deleted Items"
