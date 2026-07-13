@@ -311,9 +311,9 @@ impl App {
             FocusLeft => {
                 if self.screen == Screen::Mail {
                     self.mail.focus = match self.mail.focus {
-                        MailFocus::List => MailFocus::Account,
+                        MailFocus::List => MailFocus::Folders,
                         MailFocus::Folders => MailFocus::Account,
-                        MailFocus::Account => MailFocus::List,
+                        MailFocus::Account => MailFocus::Folders,
                     };
                 }
             }
@@ -322,7 +322,7 @@ impl App {
                     self.mail.focus = match self.mail.focus {
                         MailFocus::List => MailFocus::Folders,
                         MailFocus::Folders => MailFocus::List,
-                        MailFocus::Account => MailFocus::List,
+                        MailFocus::Account => MailFocus::Folders,
                     };
                 }
             }
