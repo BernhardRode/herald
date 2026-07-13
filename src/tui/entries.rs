@@ -24,6 +24,9 @@ pub struct FolderEntry {
     /// Tree depth (0 = root).
     #[allow(dead_code)]
     pub depth: usize,
+    /// Action tag from config resolution (e.g. "sent", "trash", "archive", "spam").
+    /// Shows which action targets this folder per the user's config.
+    pub action_tag: Option<String>,
 }
 
 /// An email entry (list view).
@@ -58,18 +61,23 @@ pub struct CalendarEventEntry {
 }
 
 pub fn format_folder(f: &FolderEntry) -> String {
-    let role_str = f.role.as_deref().unwrap_or("");
+    // Show action tag (from config resolution) if set, otherwise server role
+    let tag = f
+        .action_tag
+        .as_deref()
+        .or(f.role.as_deref())
+        .unwrap_or("");
     let unread = if f.unread_emails > 0 {
         format!(" •{}", f.unread_emails)
     } else {
         String::new()
     };
-    if role_str.is_empty() {
+    if tag.is_empty() {
         format!("{}  ({}{})", f.display_name, f.total_emails, unread)
     } else {
         format!(
             "{}  [{}]  ({}{})",
-            f.display_name, role_str, f.total_emails, unread
+            f.display_name, tag, f.total_emails, unread
         )
     }
 }

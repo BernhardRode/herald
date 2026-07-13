@@ -70,7 +70,10 @@ pub async fn load_data_for_panel(app: &mut App) {
         Panel::Folders => {
             if let Some(client) = &app.client {
                 match fetch_folders(client).await {
-                    Ok(folders) => app.folders = folders,
+                    Ok(mut folders) => {
+                        tag_action_folders(&mut folders, app);
+                        app.folders = folders;
+                    }
                     Err(e) => app.status_message = Some(format!("Mailbox error: {e}")),
                 }
             }
@@ -79,7 +82,7 @@ pub async fn load_data_for_panel(app: &mut App) {
             // If no folder selected, find the inbox
             if app.active_folder_id.is_none() {
                 if let Some(client) = &app.client {
-                    if let Ok(folders) = fetch_folders(client).await {
+                    if let Ok(mut folders) = fetch_folders(client).await {
                         if let Some(inbox) =
                             folders.iter().find(|f| f.role.as_deref() == Some("inbox"))
                         {
@@ -89,6 +92,7 @@ pub async fn load_data_for_panel(app: &mut App) {
                             app.active_folder_id = Some(first.id.clone());
                             app.active_folder_name = first.name.clone();
                         }
+                        tag_action_folders(&mut folders, app);
                         app.folders = folders;
                     }
                 }
@@ -338,6 +342,7 @@ fn build_folder_tree(
             unread_emails: f.unread_emails,
             display_name,
             depth,
+            action_tag: None,
         });
 
         build_folder_tree(raw, Some(f.id.as_str()), depth + 1, out);
@@ -355,6 +360,46 @@ fn role_priority(role: Option<&str>) -> u8 {
         Some("trash") => 4,
         Some("junk") => 5,
         _ => 99,
+    }
+}
+
+/// Tag folders with their resolved action roles based on config.
+/// Uses the same resolution order: defaults → role → config override.
+pub fn tag_action_folders(folders: &mut [FolderEntry], app: &App) {
+    use crate::config::FolderMappings;
+
+    let mappings = app
+        .config
+        .profiles
+        .get(&app.active_profile_name)
+        .map(|p| &p.folders);
+    let empty = FolderMappings::default();
+    let mappings = mappings.unwrap_or(&empty);
+
+    // For each action, resolve which folder it targets and tag it
+    let actions: &[(&str, Option<&str>, &str, &str)] = &[
+        ("inbox", None, "inbox", "Inbox"),
+        ("drafts", None, "drafts", "Drafts"),
+        ("sent", mappings.sent.as_deref(), "sent", "Sent"),
+        ("archive", mappings.archive.as_deref(), "archive", "Archive"),
+        ("trash", mappings.trash.as_deref(), "trash", "Trash"),
+        ("spam", mappings.spam.as_deref(), "junk", "Junk"),
+    ];
+
+    for &(tag, config_override, role, default_name) in actions {
+        let target_id = if let Some(configured) = config_override {
+            resolve_folder_path(folders, configured)
+        } else if let Some(f) = folders.iter().find(|f| f.role.as_deref() == Some(role)) {
+            Some(f.id.clone())
+        } else {
+            resolve_folder_path(folders, default_name)
+        };
+
+        if let Some(id) = target_id {
+            if let Some(f) = folders.iter_mut().find(|f| f.id == id) {
+                f.action_tag = Some(tag.to_string());
+            }
+        }
     }
 }
 
