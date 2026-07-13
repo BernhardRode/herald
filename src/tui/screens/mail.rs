@@ -1,6 +1,6 @@
-//! Mail screen: folder tree (left), mail list (top right), preview (bottom
-//! right). Search is fuzzy (nucleo) over server-paginated pages; scrolling
-//! near the bottom lazy-loads the next page.
+//! Mail screen: mail list (left), content preview (right). Search is fuzzy
+//! (nucleo) over server-paginated pages; scrolling near the bottom lazy-loads
+//! the next page. Navigation: List (focus) ← Folders (h) ← Account (h).
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -19,8 +19,9 @@ pub const LAZY_LOAD_THRESHOLD: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MailFocus {
-    Folders,
     List,
+    Folders,
+    Account,
 }
 
 pub struct MailScreen {
@@ -168,10 +169,6 @@ impl MailScreen {
     /// Move down. Returns true when a lazy-load of the next page is needed.
     pub fn select_next(&mut self) -> bool {
         match self.focus {
-            MailFocus::Folders => {
-                self.folder_win.select_next(self.folders.len());
-                false
-            }
             MailFocus::List => {
                 self.win.select_next(self.matched_count as usize);
                 self.results = self
@@ -183,20 +180,26 @@ impl MailScreen {
                         .win
                         .near_end(self.matched_count as usize, LAZY_LOAD_THRESHOLD)
             }
+            MailFocus::Folders => {
+                self.folder_win.select_next(self.folders.len());
+                false
+            }
+            MailFocus::Account => false, // Account has no list
         }
     }
 
     pub fn select_prev(&mut self) {
         match self.focus {
-            MailFocus::Folders => {
-                self.folder_win.select_prev();
-            }
             MailFocus::List => {
                 self.win.select_prev();
                 self.results = self
                     .matcher
                     .results(self.win.height as u32, self.win.offset as u32);
             }
+            MailFocus::Folders => {
+                self.folder_win.select_prev();
+            }
+            MailFocus::Account => {}, // Account has no list
         }
     }
 
@@ -221,19 +224,46 @@ impl MailScreen {
     pub fn render(&mut self, frame: &mut Frame, area: Rect, focused_chrome: bool) {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(32), Constraint::Percentage(68)])
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
             .split(area);
-        let right = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
-            .split(chunks[1]);
 
-        self.folder_win.set_height(chunks[0].height.saturating_sub(2) as usize);
-        self.win.set_height(right[0].height.saturating_sub(2) as usize);
+        let list_height = chunks[0].height.saturating_sub(2) as usize;
+        self.win.set_height(list_height);
+        self.folder_win.set_height(list_height);
 
-        self.render_folders(frame, chunks[0], focused_chrome && self.focus == MailFocus::Folders);
-        self.render_list(frame, right[0], focused_chrome && self.focus == MailFocus::List);
-        self.render_preview(frame, right[1]);
+        match self.focus {
+            MailFocus::List => {
+                self.render_list(frame, chunks[0], focused_chrome);
+            }
+            MailFocus::Folders => {
+                self.render_folders(frame, chunks[0], focused_chrome);
+            }
+            MailFocus::Account => {
+                self.render_account(frame, chunks[0], focused_chrome);
+            }
+        }
+        self.render_preview(frame, chunks[1]);
+    }
+
+    fn render_account(&self, frame: &mut Frame, area: Rect, focused: bool) {
+        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let lines = vec![
+            Line::from(Span::styled(
+                "📌 Profile",
+                Style::default().fg(Color::Cyan),
+            )),
+            Line::from(""),
+            Line::from("Current profile (press 'l' to return to mail)"),
+        ];
+        frame.render_widget(
+            Paragraph::new(lines).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border))
+                    .title(" Account "),
+            ),
+            area,
+        );
     }
 
     fn render_folders(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
@@ -256,7 +286,7 @@ impl MailScreen {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border))
-                    .title(" Folders "),
+                    .title(" Folders (press 'l' to return) "),
             )
             .highlight_style(
                 Style::default()
