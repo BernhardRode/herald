@@ -23,7 +23,14 @@ pub struct OutgoingMail<'a> {
 }
 
 /// Send an email: build RFC 5322 via mail-builder, upload, import, submit.
-pub async fn send_message(client: &JmapClient, mail: &OutgoingMail<'_>) -> JmapResult<()> {
+///
+/// If `sent_mailbox_id` is provided, the imported message is filed there
+/// instead of the server's role-tagged sent folder.
+pub async fn send_message(
+    client: &JmapClient,
+    mail: &OutgoingMail<'_>,
+    sent_mailbox_id: Option<&str>,
+) -> JmapResult<()> {
     // Validate all header values against CR/LF injection
     validate_header_value("to", mail.to)?;
     validate_header_value("cc", mail.cc)?;
@@ -84,20 +91,30 @@ pub async fn send_message(client: &JmapClient, mail: &OutgoingMail<'_>) -> JmapR
         .await?;
     let blob_id = blob_resp.blob_id;
 
-    // Import into Sent (fall back to Drafts, then any mailbox)
+    // Import into Sent folder (config override > role > drafts > any)
     let mailboxes = sc.mailbox_get(None, None).await?;
-    let sent_box = mailboxes
-        .list
-        .iter()
-        .find(|m| m.role.as_ref().is_some_and(|r| r.to_wire_str() == "sent"))
-        .or_else(|| {
-            mailboxes
-                .list
-                .iter()
-                .find(|m| m.role.as_ref().is_some_and(|r| r.to_wire_str() == "drafts"))
-        })
-        .or(mailboxes.list.first())
-        .ok_or("no mailboxes available")?;
+    let sent_box = if let Some(override_id) = sent_mailbox_id {
+        mailboxes
+            .list
+            .iter()
+            .find(|m| m.id.as_ref() == override_id)
+    } else {
+        None
+    }
+    .or_else(|| {
+        mailboxes
+            .list
+            .iter()
+            .find(|m| m.role.as_ref().is_some_and(|r| r.to_wire_str() == "sent"))
+    })
+    .or_else(|| {
+        mailboxes
+            .list
+            .iter()
+            .find(|m| m.role.as_ref().is_some_and(|r| r.to_wire_str() == "drafts"))
+    })
+    .or(mailboxes.list.first())
+    .ok_or("no mailboxes available")?;
     let mailbox_ids: Vec<Id> = vec![sent_box.id.clone()];
 
     let mut emails_map: HashMap<String, EmailImportInput<'_>> = HashMap::new();

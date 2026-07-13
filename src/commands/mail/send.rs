@@ -31,6 +31,7 @@ pub async fn send_email(
             subject,
             body,
         },
+        None, // CLI doesn't resolve folder overrides; server role is used
     )
     .await?;
 
