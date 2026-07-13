@@ -327,12 +327,31 @@ impl App {
             }
             FocusRight => {
                 if self.screen == Screen::Mail {
-                    self.mail.focus = match self.mail.focus {
-                        MailFocus::List => MailFocus::Folders,
-                        MailFocus::SearchResults => MailFocus::Folders,
-                        MailFocus::Folders => MailFocus::List,
-                        MailFocus::Account => MailFocus::Folders,
-                    };
+                    match self.mail.focus {
+                        MailFocus::Folders => {
+                            // Opening a folder with right arrow
+                            if let Some(f) = self.mail.selected_folder() {
+                                let (id, name) = (f.id.clone(), f.name.clone());
+                                self.mail.active_folder_id = Some(id.clone());
+                                self.mail.active_folder_name = name;
+                                self.mail.focus = MailFocus::List;
+                                self.mail.query.clear();
+                                self.mail.win.reset();
+                                self.send(Command::LoadMailPage {
+                                    folder_id: Some(id),
+                                    position: 0,
+                                });
+                            }
+                        }
+                        _ => {
+                            self.mail.focus = match self.mail.focus {
+                                MailFocus::List => MailFocus::Folders,
+                                MailFocus::SearchResults => MailFocus::Folders,
+                                MailFocus::Folders => MailFocus::List,
+                                MailFocus::Account => MailFocus::Folders,
+                            };
+                        }
+                    }
                 }
             }
 
