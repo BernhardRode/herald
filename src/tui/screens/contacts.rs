@@ -76,8 +76,9 @@ impl ContactsScreen {
             .split(area);
 
         self.win.set_height(chunks[0].height.saturating_sub(2) as usize);
+        let filtered_len = self.filtered().len();
+        self.win.clamp(filtered_len);
         let filtered = self.filtered();
-        self.win.clamp(filtered.len());
 
         let border = if focused { Color::Cyan } else { Color::DarkGray };
         let visible = self.win.offset..(self.win.offset + self.win.height).min(filtered.len());
