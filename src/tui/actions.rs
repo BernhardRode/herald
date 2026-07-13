@@ -456,11 +456,7 @@ impl App {
             _ => return None,
         };
 
-        let target_folder_id = self
-            .folders
-            .iter()
-            .find(|f| f.name == target_folder_name)
-            .map(|f| f.id.clone());
+        let target_folder_id = self.resolve_folder_path(target_folder_name);
         let Some(target_folder_id) = target_folder_id else {
             self.status_message = Some(format!("Folder not found: {target_folder_name}"));
             return None;
@@ -472,6 +468,36 @@ impl App {
             target_mailbox_id: target_folder_id,
             action_name: target.to_string(),
         })
+    }
+
+    /// Resolve a folder by name or path (e.g. "Archive" or "Archive/2026").
+    ///
+    /// - Simple name: matches any folder with that exact name.
+    /// - Path (contains `/`): walks the tree segment by segment.
+    fn resolve_folder_path(&self, path: &str) -> Option<String> {
+        if !path.contains('/') {
+            // Simple name match
+            return self
+                .folders
+                .iter()
+                .find(|f| f.name == path)
+                .map(|f| f.id.clone());
+        }
+
+        // Path-based resolution: walk parent/child segments
+        let segments: Vec<&str> = path.split('/').collect();
+        let mut current_parent_id: Option<String> = None;
+
+        for (i, segment) in segments.iter().enumerate() {
+            let f = self.folders.iter().find(|f| {
+                f.name == *segment && f.parent_id.as_deref() == current_parent_id.as_deref()
+            })?;
+            if i == segments.len() - 1 {
+                return Some(f.id.clone());
+            }
+            current_parent_id = Some(f.id.clone());
+        }
+        None
     }
 
     // -----------------------------------------------------------------------
