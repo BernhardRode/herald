@@ -6,9 +6,12 @@ use clap::Subcommand;
 use jmap_base_client::{JmapClient, UploadBlobParams};
 use jmap_mail_client::{EmailImportInput, JmapMailExt};
 use jmap_types::Id;
+use mail_builder::MessageBuilder;
 use serde_json::json;
 
 use crate::config::Profile;
+use crate::sanitize::sanitize_display;
+use crate::validate::validate_header_value;
 
 #[derive(Debug, Subcommand)]
 pub enum MailCommand {
@@ -85,6 +88,14 @@ async fn send_email(
 
     let from_name = profile.from_name.clone().unwrap_or_default();
 
+    // Validate header values against injection (CR/LF)
+    validate_header_value("to", to)?;
+    validate_header_value("subject", subject)?;
+    validate_header_value("from", &from_email)?;
+    if !from_name.is_empty() {
+        validate_header_value("from_name", &from_name)?;
+    }
+
     // Step 1: Find the identity that matches our from address
     let identities = sc.identity_get(None, None).await?;
     let identity = identities
@@ -97,35 +108,28 @@ async fn send_email(
     let identity_id = identity.id.clone();
     tracing::info!("Using identity: {} <{}>", identity.name, identity.email);
 
-    // Step 2: Build RFC 5322 message
-    let date = rfc2822_date_now();
-    let msg_id = format!(
-        "<{}.{}@herald>",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis(),
-        rand_hex(8)
-    );
+    // Step 2: Build RFC 5322 message using mail-builder (proper RFC 2047 encoding)
+    let msg_id = generate_message_id(&from_email);
+    // Strip angle brackets for mail-builder (it adds them automatically)
+    let msg_id_bare = msg_id.trim_start_matches('<').trim_end_matches('>');
 
-    let from_header = if from_name.is_empty() {
-        from_email.clone()
+    let message = if from_name.is_empty() {
+        MessageBuilder::new()
+            .from(from_email.as_str())
+            .to(to)
+            .subject(subject)
+            .message_id(msg_id_bare)
+            .text_body(body)
+            .write_to_vec()?
     } else {
-        format!("{from_name} <{from_email}>")
+        MessageBuilder::new()
+            .from((from_name.as_str(), from_email.as_str()))
+            .to(to)
+            .subject(subject)
+            .message_id(msg_id_bare)
+            .text_body(body)
+            .write_to_vec()?
     };
-
-    let rfc5322 = format!(
-        "From: {from_header}\r\n\
-         To: {to}\r\n\
-         Subject: {subject}\r\n\
-         Date: {date}\r\n\
-         Message-ID: {msg_id}\r\n\
-         MIME-Version: 1.0\r\n\
-         Content-Type: text/plain; charset=utf-8\r\n\
-         Content-Transfer-Encoding: 8bit\r\n\
-         \r\n\
-         {body}\r\n"
-    );
 
     // Step 3: Upload blob
     let account_id = session
@@ -137,7 +141,7 @@ async fn send_email(
             upload_url_template: &session.upload_url,
             account_id,
             content_type: "message/rfc822",
-            data: bytes::Bytes::from(rfc5322.into_bytes()),
+            data: bytes::Bytes::from(message),
         })
         .await?;
 
@@ -250,8 +254,8 @@ async fn send_email(
     }
 
     println!("✓ Email sent successfully!");
-    println!("  To: {to}");
-    println!("  Subject: {subject}");
+    println!("  To: {}", sanitize_display(to));
+    println!("  Subject: {}", sanitize_display(subject));
 
     Ok(())
 }
@@ -335,12 +339,15 @@ async fn list_emails(client: &JmapClient) -> Result<(), Box<dyn std::error::Erro
 
         let date = email.received_at.as_ref();
 
+        let from_str = sanitize_display(&from_str);
+        let subject = sanitize_display(subject);
+
         println!(
             "{:<12} {:<30} {:<25} {}",
             email.id.as_ref(),
             truncate_str(&from_str, 28),
             truncate_str(date, 23),
-            truncate_str(subject, 50),
+            truncate_str(&subject, 50),
         );
     }
     Ok(())
@@ -418,9 +425,9 @@ async fn read_email(
         .map(|d| d.as_ref().to_string())
         .unwrap_or_else(|| email.received_at.as_ref().to_string());
 
-    println!("Subject: {subject}");
-    println!("From:    {from_str}");
-    println!("To:      {to_str}");
+    println!("Subject: {}", sanitize_display(subject));
+    println!("From:    {}", sanitize_display(&from_str));
+    println!("To:      {}", sanitize_display(&to_str));
     println!("Date:    {date}");
     println!("{}", "-".repeat(60));
 
@@ -433,9 +440,9 @@ async fn read_email(
         .map(|bv| bv.value.as_str());
 
     if let Some(text) = body_text {
-        println!("{text}");
+        println!("{}", sanitize_display(text));
     } else if let Some(preview) = &email.preview {
-        println!("[Preview] {preview}");
+        println!("[Preview] {}", sanitize_display(preview));
     } else {
         println!("(no text body available)");
     }
@@ -454,79 +461,16 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Generate an RFC 2822 date string in UTC.
-fn rfc2822_date_now() -> String {
-    let now = std::time::SystemTime::now()
+/// Generate a Message-ID using the from-address domain.
+fn generate_message_id(from_email: &str) -> String {
+    let domain = from_email
+        .rsplit_once('@')
+        .map(|(_, d)| d)
+        .unwrap_or("localhost");
+    let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
-
-    let days = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
-    let months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-
-    let secs_per_day: u64 = 86400;
-    let days_since_epoch = now / secs_per_day;
-    let day_of_week = ((days_since_epoch + 4) % 7) as usize;
-
-    let mut year = 1970u64;
-    let mut remaining_days = days_since_epoch;
-    loop {
-        let days_in_year =
-            if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) {
-                366
-            } else {
-                365
-            };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        year += 1;
-    }
-
-    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
-    let month_days: [u64; 12] = [
-        31,
-        if leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut month = 0usize;
-    for (i, &d) in month_days.iter().enumerate() {
-        if remaining_days < d {
-            month = i;
-            break;
-        }
-        remaining_days -= d;
-    }
-    let day = remaining_days + 1;
-    let time_of_day = now % secs_per_day;
-    let hours = time_of_day / 3600;
-    let minutes = (time_of_day % 3600) / 60;
-    let seconds = time_of_day % 60;
-
-    format!(
-        "{}, {:02} {} {} {:02}:{:02}:{:02} +0000",
-        days[day_of_week], day, months[month], year, hours, minutes, seconds
-    )
-}
-
-fn rand_hex(len: usize) -> String {
-    let mut s = String::with_capacity(len * 2);
-    let bytes: Vec<u8> = (0..len).map(|_| rand::random()).collect();
-    for b in bytes {
-        use std::fmt::Write;
-        let _ = write!(s, "{b:02x}");
-    }
-    s
+        .as_millis();
+    let random: u64 = rand::random();
+    format!("<{timestamp}.{random:016x}@{domain}>")
 }

@@ -10,18 +10,46 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::auth::check_file_permissions;
+use crate::secret::Secret;
+use crate::validate::{validate_server_url, ValidateError};
+
 /// Authentication method for a profile.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "kebab-case")]
 pub enum AuthMethod {
     /// HTTP Basic auth with username:password (app password)
-    AppPassword { username: String, password: String },
+    AppPassword {
+        username: String,
+        password: Secret<String>,
+    },
     /// Bearer token (API key)
-    ApiKey { token: String },
+    ApiKey { token: Secret<String> },
     /// OAuth2 browser flow (Authorization Code + PKCE)
     OAuthBrowser { client_id: String },
     /// OAuth2 Device Authorization Grant
     OAuthDevice { client_id: String },
+}
+
+impl std::fmt::Debug for AuthMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AppPassword { username, .. } => f
+                .debug_struct("AppPassword")
+                .field("username", username)
+                .field("password", &"***")
+                .finish(),
+            Self::ApiKey { .. } => f.debug_struct("ApiKey").field("token", &"***").finish(),
+            Self::OAuthBrowser { client_id } => f
+                .debug_struct("OAuthBrowser")
+                .field("client_id", client_id)
+                .finish(),
+            Self::OAuthDevice { client_id } => f
+                .debug_struct("OAuthDevice")
+                .field("client_id", client_id)
+                .finish(),
+        }
+    }
 }
 
 /// A named connection profile.
@@ -37,6 +65,33 @@ pub struct Profile {
     /// Default "From" display name
     #[serde(default)]
     pub from_name: Option<String>,
+    /// Folder mappings for mail actions (archive, spam, trash).
+    /// Values are mailbox names or paths (e.g. "Archive/2026").
+    #[serde(default)]
+    pub folders: FolderMappings,
+    /// Format for composing emails: "plain" (default) or "markdown" (converts to HTML).
+    #[serde(default)]
+    pub compose_format: Option<String>,
+    /// Email signature appended to new messages and replies.
+    #[serde(default)]
+    pub signature: Option<String>,
+    /// Allow non-HTTPS server URLs (for local development).
+    #[serde(default)]
+    pub allow_insecure: bool,
+}
+
+/// Configurable folder mappings for mail actions.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FolderMappings {
+    /// Mailbox name/path for archiving (default: "Archive")
+    #[serde(default)]
+    pub archive: Option<String>,
+    /// Mailbox name/path for spam/junk (default: "Junk")
+    #[serde(default)]
+    pub spam: Option<String>,
+    /// Mailbox name/path for trash/deleted (default: "Trash")
+    #[serde(default)]
+    pub trash: Option<String>,
 }
 
 /// Top-level config file structure.
@@ -57,9 +112,17 @@ impl Config {
         if !path.exists() {
             return Ok(Self::default());
         }
+        check_file_permissions(&path);
         let content =
             std::fs::read_to_string(&path).map_err(|e| ConfigError::Io(path.clone(), e))?;
         let config: Config = toml::from_str(&content).map_err(|e| ConfigError::Parse(path, e))?;
+
+        // Validate server URLs for each profile
+        for profile in config.profiles.values() {
+            validate_server_url(&profile.server_url, profile.allow_insecure)
+                .map_err(ConfigError::Validate)?;
+        }
+
         Ok(config)
     }
 
@@ -78,6 +141,9 @@ impl Config {
         let server_url = std::env::var("HERALD_SERVER_URL")
             .map_err(|_| ConfigError::MissingEnv("HERALD_SERVER_URL"))?;
 
+        // Validate the server URL (allow_insecure defaults to false for env-based config)
+        validate_server_url(&server_url, false).map_err(ConfigError::Validate)?;
+
         let auth_method =
             std::env::var("HERALD_AUTH_METHOD").unwrap_or_else(|_| "app-password".into());
 
@@ -87,12 +153,17 @@ impl Config {
                     .map_err(|_| ConfigError::MissingEnv("HERALD_USERNAME"))?;
                 let password = std::env::var("HERALD_PASSWORD")
                     .map_err(|_| ConfigError::MissingEnv("HERALD_PASSWORD"))?;
-                AuthMethod::AppPassword { username, password }
+                AuthMethod::AppPassword {
+                    username,
+                    password: Secret::new(password),
+                }
             }
             "api-key" => {
                 let token = std::env::var("HERALD_API_KEY")
                     .map_err(|_| ConfigError::MissingEnv("HERALD_API_KEY"))?;
-                AuthMethod::ApiKey { token }
+                AuthMethod::ApiKey {
+                    token: Secret::new(token),
+                }
             }
             "oauth-browser" => {
                 let client_id = std::env::var("HERALD_CLIENT_ID")
@@ -117,6 +188,10 @@ impl Config {
             auth,
             from_email,
             from_name,
+            folders: FolderMappings::default(),
+            compose_format: None,
+            signature: None,
+            allow_insecure: false,
         };
 
         let mut profiles = HashMap::new();
@@ -146,6 +221,22 @@ impl Config {
 
         self.profiles
             .get(&profile_name)
+            .ok_or(ConfigError::ProfileNotFound(profile_name))
+    }
+
+    /// Get a profile by name (or the default profile) along with the resolved profile name.
+    pub fn get_profile_with_name(
+        &self,
+        name: Option<&str>,
+    ) -> Result<(&str, &Profile), ConfigError> {
+        let profile_name = name
+            .map(|s| s.to_string())
+            .or_else(|| self.default_profile.clone())
+            .unwrap_or_else(|| "default".to_string());
+
+        self.profiles
+            .get_key_value(&profile_name)
+            .map(|(k, v)| (k.as_str(), v))
             .ok_or(ConfigError::ProfileNotFound(profile_name))
     }
 
@@ -181,11 +272,14 @@ pub enum ConfigError {
     InvalidAuthMethod(String),
     #[error("could not determine config directory")]
     NoConfigDir,
+    #[error("URL validation error: {0}")]
+    Validate(#[from] ValidateError),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::secret::Secret;
     use std::sync::Mutex;
 
     /// Global mutex to serialize tests that mutate environment variables.
@@ -240,7 +334,7 @@ mod tests {
         match &profile.auth {
             AuthMethod::AppPassword { username, password } => {
                 assert_eq!(username, "alice");
-                assert_eq!(password, "secret123");
+                assert_eq!(password.expose(), "secret123");
             }
             other => panic!("expected AppPassword, got {other:?}"),
         }
@@ -265,7 +359,7 @@ mod tests {
 
         match &profile.auth {
             AuthMethod::ApiKey { token } => {
-                assert_eq!(token, "tok_abc123");
+                assert_eq!(token.expose(), "tok_abc123");
             }
             other => panic!("expected ApiKey, got {other:?}"),
         }
@@ -367,10 +461,14 @@ mod tests {
             Profile {
                 server_url: "https://work.example.com".to_string(),
                 auth: AuthMethod::ApiKey {
-                    token: "t".to_string(),
+                    token: Secret::new("t".to_string()),
                 },
                 from_email: None,
                 from_name: None,
+                folders: FolderMappings::default(),
+                compose_format: None,
+                signature: None,
+                allow_insecure: false,
             },
         );
         profiles.insert(
@@ -378,10 +476,14 @@ mod tests {
             Profile {
                 server_url: "https://personal.example.com".to_string(),
                 auth: AuthMethod::ApiKey {
-                    token: "p".to_string(),
+                    token: Secret::new("p".to_string()),
                 },
                 from_email: None,
                 from_name: None,
+                folders: FolderMappings::default(),
+                compose_format: None,
+                signature: None,
+                allow_insecure: false,
             },
         );
 
@@ -402,10 +504,14 @@ mod tests {
             Profile {
                 server_url: "https://main.example.com".to_string(),
                 auth: AuthMethod::ApiKey {
-                    token: "m".to_string(),
+                    token: Secret::new("m".to_string()),
                 },
                 from_email: None,
                 from_name: None,
+                folders: FolderMappings::default(),
+                compose_format: None,
+                signature: None,
+                allow_insecure: false,
             },
         );
 
@@ -485,7 +591,7 @@ mod tests {
         match &home.auth {
             AuthMethod::AppPassword { username, password } => {
                 assert_eq!(username, "me");
-                assert_eq!(password, "hunter2");
+                assert_eq!(password.expose(), "hunter2");
             }
             other => panic!("expected AppPassword, got {other:?}"),
         }
@@ -523,7 +629,7 @@ mod tests {
 
         let api = config.profiles.get("api").unwrap();
         match &api.auth {
-            AuthMethod::ApiKey { token } => assert_eq!(token, "secret-token-xyz"),
+            AuthMethod::ApiKey { token } => assert_eq!(token.expose(), "secret-token-xyz"),
             other => panic!("expected ApiKey, got {other:?}"),
         }
 
