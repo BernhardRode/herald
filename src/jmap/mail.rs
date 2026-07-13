@@ -209,6 +209,127 @@ pub async fn move_email(
     check_set_response(&resp, "Email/set", "notUpdated")
 }
 
+/// Query all email IDs in a mailbox (paginated, up to `limit`).
+pub async fn query_mailbox_emails(
+    client: &JmapClient,
+    mailbox_id: &str,
+    limit: u64,
+) -> JmapResult<Vec<String>> {
+    let session = client.fetch_session().await?;
+    let sc = client.with_mail_session(session);
+
+    let filter = json!({ "inMailbox": mailbox_id });
+    let resp = sc
+        .email_query(Some(filter), None, Some(0), Some(limit), None)
+        .await?;
+
+    Ok(resp.ids.iter().map(|id| id.as_ref().to_string()).collect())
+}
+
+/// Move multiple emails from one mailbox to another in a single batch.
+/// Returns the number of successfully moved emails.
+pub async fn move_emails_bulk(
+    client: &JmapClient,
+    email_ids: &[String],
+    source_mailbox_id: &str,
+    target_mailbox_id: &str,
+) -> JmapResult<usize> {
+    if email_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let session = client.fetch_session().await?;
+    let account_id = session
+        .primary_account_id("urn:ietf:params:jmap:mail")
+        .ok_or("no primary mail account in session")?;
+
+    let patch = json!({
+        format!("mailboxIds/{source_mailbox_id}"): null,
+        format!("mailboxIds/{target_mailbox_id}"): true
+    });
+
+    let mut update = serde_json::Map::new();
+    for id in email_ids {
+        update.insert(id.clone(), patch.clone());
+    }
+
+    let request_args = json!({
+        "accountId": account_id,
+        "update": update
+    });
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:mail".to_string(),
+        ],
+        vec![("Email/set".to_string(), request_args, "bulk1".to_string())],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+
+    // Count successes
+    let updated_count = resp
+        .method_responses
+        .iter()
+        .find(|(name, _, _)| name == "Email/set")
+        .and_then(|(_, result, _)| result["updated"].as_object())
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    // Check for errors but don't fail the whole operation
+    let not_updated = resp
+        .method_responses
+        .iter()
+        .find(|(name, _, _)| name == "Email/set")
+        .and_then(|(_, result, _)| result["notUpdated"].as_object())
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    if not_updated > 0 {
+        check_set_response(&resp, "Email/set", "notUpdated")?;
+    }
+
+    Ok(updated_count)
+}
+
+/// Destroy (permanently delete) a mailbox by ID.
+///
+/// The mailbox must be empty (no emails) and have no child mailboxes.
+/// Set `on_destroy_remove_emails` to move remaining emails to Trash first.
+pub async fn destroy_mailbox(
+    client: &JmapClient,
+    mailbox_id: &str,
+    on_destroy_remove_emails: bool,
+) -> JmapResult<()> {
+    let session = client.fetch_session().await?;
+    let account_id = session
+        .primary_account_id("urn:ietf:params:jmap:mail")
+        .ok_or("no primary mail account in session")?;
+
+    let mut request_args = json!({
+        "accountId": account_id,
+        "destroy": [mailbox_id]
+    });
+    if on_destroy_remove_emails {
+        request_args["onDestroyRemoveEmails"] = json!(true);
+    }
+
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:mail".to_string(),
+        ],
+        vec![(
+            "Mailbox/set".to_string(),
+            request_args,
+            "del1".to_string(),
+        )],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+    check_set_response(&resp, "Mailbox/set", "notDestroyed")
+}
+
 /// Split a comma-separated address list into trimmed parts.
 fn split_addresses(s: &str) -> Vec<&str> {
     s.split(',')
