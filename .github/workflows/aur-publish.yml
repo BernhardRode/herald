@@ -1,0 +1,189 @@
+name: Athena AUR Publish
+
+# Hephaestus Forge is tag-triggered, so the triggering run's head_branch is the
+# tag name (e.g. "v0.1.2") — a `branches: [main]` filter would never match.
+on:
+  workflow_run:
+    workflows: ["Hephaestus Forge"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+env:
+  AUR_PKG_BIN: herald-jmap-cli-bin
+  AUR_PKG_GIT: herald-jmap-cli-git
+
+jobs:
+  publish-aur:
+    name: Publish to AUR
+    runs-on: ubuntu-latest
+    # AUR publishing is disabled for now — remove the `false &&` to re-enable.
+    if: ${{ false && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from triggering tag
+        id: version
+        run: |
+          # Hephaestus Forge is tag-triggered; head_branch carries the tag name
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing AUR packages for version: $VERSION"
+
+      - name: Download release checksums
+        id: checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+
+          # Missing checksums must fail the job — publishing a PKGBUILD with
+          # sha256sums=SKIP would ship an unverifiable binary to every AUR user.
+          X86_ARCHIVE="herald-jmap-cli-${TAG}-x86_64-unknown-linux-gnu.tar.xz"
+          X86_CHECKSUM=$(gh release download "$TAG" --pattern "${X86_ARCHIVE}.sha256" --output - | awk '{print $1}')
+          if [[ -z "$X86_CHECKSUM" ]]; then
+            echo "::error::Missing ${X86_ARCHIVE}.sha256 on release ${TAG}"
+            exit 1
+          fi
+
+          ARM_ARCHIVE="herald-jmap-cli-${TAG}-aarch64-unknown-linux-gnu.tar.xz"
+          ARM_CHECKSUM=$(gh release download "$TAG" --pattern "${ARM_ARCHIVE}.sha256" --output - | awk '{print $1}')
+          if [[ -z "$ARM_CHECKSUM" ]]; then
+            echo "::error::Missing ${ARM_ARCHIVE}.sha256 on release ${TAG}"
+            exit 1
+          fi
+
+          echo "x86_64=$X86_CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "aarch64=$ARM_CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "Checksums: x86_64=$X86_CHECKSUM aarch64=$ARM_CHECKSUM"
+
+      - name: Setup SSH for AUR
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          # Pinned host key published by the AUR (https://aur.archlinux.org),
+          # instead of trust-on-first-use ssh-keyscan
+          echo "aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            User aur
+          EOF
+
+      - name: Configure git
+        # RELEASE_GIT_NAME / RELEASE_GIT_EMAIL must be set as repository variables
+        run: |
+          if [[ -z "${{ vars.RELEASE_GIT_NAME }}" || -z "${{ vars.RELEASE_GIT_EMAIL }}" ]]; then
+            echo "::error::Repository variables RELEASE_GIT_NAME and RELEASE_GIT_EMAIL must be set"
+            exit 1
+          fi
+          git config --global user.name "${{ vars.RELEASE_GIT_NAME }}"
+          git config --global user.email "${{ vars.RELEASE_GIT_EMAIL }}"
+
+      - name: Publish herald-jmap-cli-bin
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          X86_CHECKSUM="${{ steps.checksums.outputs.x86_64 }}"
+          ARM_CHECKSUM="${{ steps.checksums.outputs.aarch64 }}"
+
+          # Clone AUR repo
+          git -c init.defaultBranch=master clone "ssh://aur@aur.archlinux.org/${AUR_PKG_BIN}.git" /tmp/aur-bin || \
+            { mkdir -p /tmp/aur-bin && cd /tmp/aur-bin && git -c init.defaultBranch=master init && git remote add origin "ssh://aur@aur.archlinux.org/${AUR_PKG_BIN}.git"; }
+          cd /tmp/aur-bin
+
+          # Copy PKGBUILD template and update version + checksums
+          cp "${GITHUB_WORKSPACE}/packaging/aur/herald-jmap-cli-bin/PKGBUILD" .
+          cp "${GITHUB_WORKSPACE}/packaging/aur/herald-jmap-cli-bin/LICENSE" .
+
+          # Update pkgver
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          # Reset pkgrel for new version
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+
+          # Update checksums (guaranteed present — the checksums step fails otherwise)
+          sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('${X86_CHECKSUM}')/" PKGBUILD
+          sed -i "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('${ARM_CHECKSUM}')/" PKGBUILD
+
+          # Generate .SRCINFO
+          cat > .SRCINFO <<SRCINFO
+          pkgbase = herald-jmap-cli-bin
+          	pkgdesc = An opinionated JMAP CLI for Stalwart Mail Server
+          	pkgver = ${VERSION}
+          	pkgrel = 1
+          	url = https://github.com/BernhardRode/herald
+          	arch = x86_64
+          	arch = aarch64
+          	license = MIT
+          	license = Apache-2.0
+          	depends = gcc-libs
+          	provides = herald
+          	conflicts = herald
+          	conflicts = herald-jmap-cli-git
+          	options = !strip
+          	source_x86_64 = https://github.com/BernhardRode/herald/releases/download/v${VERSION}/herald-jmap-cli-v${VERSION}-x86_64-unknown-linux-gnu.tar.xz
+          	sha256sums_x86_64 = ${X86_CHECKSUM}
+          	source_aarch64 = https://github.com/BernhardRode/herald/releases/download/v${VERSION}/herald-jmap-cli-v${VERSION}-aarch64-unknown-linux-gnu.tar.xz
+          	sha256sums_aarch64 = ${ARM_CHECKSUM}
+
+          pkgname = herald-jmap-cli-bin
+          SRCINFO
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' .SRCINFO
+
+          git add PKGBUILD .SRCINFO LICENSE
+          git commit -m "Update to ${VERSION}" || echo "No changes to commit"
+          git push origin master
+
+      - name: Publish herald-jmap-cli-git
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Clone AUR repo
+          git -c init.defaultBranch=master clone "ssh://aur@aur.archlinux.org/${AUR_PKG_GIT}.git" /tmp/aur-git || \
+            { mkdir -p /tmp/aur-git && cd /tmp/aur-git && git -c init.defaultBranch=master init && git remote add origin "ssh://aur@aur.archlinux.org/${AUR_PKG_GIT}.git"; }
+          cd /tmp/aur-git
+
+          # Copy PKGBUILD template
+          cp "${GITHUB_WORKSPACE}/packaging/aur/herald-jmap-cli-git/PKGBUILD" .
+          cp "${GITHUB_WORKSPACE}/packaging/aur/herald-jmap-cli-git/LICENSE" .
+
+          # Generate .SRCINFO
+          cat > .SRCINFO <<SRCINFO
+          pkgbase = herald-jmap-cli-git
+          	pkgdesc = An opinionated JMAP CLI for Stalwart Mail Server (git version)
+          	pkgver = ${VERSION}
+          	pkgrel = 1
+          	url = https://github.com/BernhardRode/herald
+          	arch = x86_64
+          	arch = aarch64
+          	license = MIT
+          	license = Apache-2.0
+          	makedepends = cargo
+          	makedepends = git
+          	depends = gcc-libs
+          	provides = herald
+          	conflicts = herald
+          	conflicts = herald-jmap-cli-bin
+          	source = herald-jmap-cli-git::git+https://github.com/BernhardRode/herald.git
+          	sha256sums = SKIP
+
+          pkgname = herald-jmap-cli-git
+          SRCINFO
+
+          sed -i 's/^          //' .SRCINFO
+
+          git add PKGBUILD .SRCINFO LICENSE
+          git commit -m "Update to ${VERSION}" || echo "No changes to commit"
+          git push origin master
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/aur
