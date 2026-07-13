@@ -13,7 +13,6 @@ pub struct RawFolder {
     pub name: String,
     pub parent_id: Option<String>,
     pub role: Option<String>,
-    pub sort_order: u32,
     pub total_emails: u32,
     pub unread_emails: u32,
 }
@@ -42,7 +41,6 @@ fn build_tree(
     children.sort_by(|a, b| {
         role_priority(a.role.as_deref())
             .cmp(&role_priority(b.role.as_deref()))
-            .then_with(|| a.sort_order.cmp(&b.sort_order))
             .then_with(|| a.name.cmp(&b.name))
     });
 
@@ -54,7 +52,6 @@ fn build_tree(
             name: f.name.clone(),
             parent_id: f.parent_id.clone(),
             role: f.role.clone(),
-            sort_order: f.sort_order,
             total_emails: f.total_emails,
             unread_emails: f.unread_emails,
             display_name: format!("{indent}{prefix}{}", f.name),
@@ -205,7 +202,6 @@ mod tests {
             name: name.into(),
             parent_id: parent.map(String::from),
             role: role.map(String::from),
-            sort_order: 0,
             total_emails: 0,
             unread_emails: 0,
         }

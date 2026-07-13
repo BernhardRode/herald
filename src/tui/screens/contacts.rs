@@ -88,10 +88,10 @@ impl ContactsScreen {
                 let label = if c.email.is_empty() {
                     c.name.clone()
                 } else {
-                    format!("{}  <{}>", c.name, c.email)
+                    c.email.clone()
                 };
                 ListItem::new(Line::from(vec![
-                    Span::styled("📇 ", Style::default().fg(Color::Cyan)),
+                    Span::styled("<0xF0><0x9F><0x93><0x87> ", Style::default().fg(Color::Cyan)),
                     Span::styled(label, Style::default().fg(Color::White)),
                 ]))
             })

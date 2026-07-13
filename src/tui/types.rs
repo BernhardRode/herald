@@ -8,7 +8,6 @@ pub struct FolderEntry {
     pub name: String,
     pub parent_id: Option<String>,
     pub role: Option<String>,
-    pub sort_order: u32,
     pub total_emails: u32,
     pub unread_emails: u32,
     /// Computed display name with tree indentation.
@@ -29,6 +28,13 @@ pub struct MailEntry {
     pub preview: String,
     /// First mailbox id, for folder-name resolution in all-folder views.
     pub folder_id: Option<String>,
+    pub is_read: bool,
+}
+
+impl MailEntry {
+    pub fn is_unread(&self) -> bool {
+        !self.is_read
+    }
 }
 
 /// A contact list entry.

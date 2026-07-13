@@ -209,6 +209,30 @@ pub async fn move_email(
     check_set_response(&resp, "Email/set", "notUpdated")
 }
 
+/// Mark an email as read (Email/set with a `keywords/$seen` patch).
+pub async fn mark_read(client: &JmapClient, email_id: &str) -> JmapResult<()> {
+    let session = client.fetch_session().await?;
+    let account_id = session
+        .primary_account_id("urn:ietf:params:jmap:mail")
+        .ok_or("no primary mail account in session")?;
+
+    let update_patch = json!({ "keywords/$seen": true });
+    let request_args = json!({
+        "accountId": account_id,
+        "update": { email_id: update_patch }
+    });
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:mail".to_string(),
+        ],
+        vec![("Email/set".to_string(), request_args, "seen1".to_string())],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+    check_set_response(&resp, "Email/set", "notUpdated")
+}
+
 /// Query all email IDs in a mailbox (paginated, up to `limit`).
 pub async fn query_mailbox_emails(
     client: &JmapClient,

@@ -121,6 +121,10 @@ impl MailScreen {
         self.matcher.tick();
     }
 
+    /// The string the fuzzy matcher sees. Deliberately excludes the unread
+    /// marker: read state changes without a reload, and rebuilding the async
+    /// matcher mid-scroll would blank the results and reset the cursor. The
+    /// marker is drawn from live state in [`Self::row_icon`] instead.
     fn format_mail(&self, mail: &MailEntry) -> String {
         if self.all_folders {
             let folder = mail
@@ -135,11 +139,40 @@ impl MailScreen {
         }
     }
 
+    /// Row prefix reflecting the current read state: a dot for unread,
+    /// blank for read.
+    fn row_icon(&self, id: &str) -> &'static str {
+        let unread = self
+            .mails
+            .iter()
+            .find(|m| m.id == id)
+            .is_some_and(|m| m.is_unread());
+        if unread {
+            "✉  ● "
+        } else {
+            "✉    "
+        }
+    }
+
+    /// Flip an entry to read. The marker is rendered from live state, so no
+    /// matcher rebuild is needed (rebuilding would reset the cursor while the
+    /// async matcher catches up).
+    pub fn mark_read(&mut self, id: &str) {
+        if let Some(m) = self.mails.iter_mut().find(|m| m.id == id) {
+            m.is_read = true;
+        }
+    }
+
     /// Tick the matcher and refresh the visible result window.
     pub fn tick(&mut self) {
         self.matcher.tick();
         self.matched_count = self.matcher.matched_item_count;
-        self.win.clamp(self.matched_count as usize);
+        // Skip the clamp while the async matcher reports 0 matches for a
+        // non-empty list (transient state right after a rebuild) — clamping
+        // then would yank the cursor back to the top of the list.
+        if self.matched_count > 0 || self.mails.is_empty() {
+            self.win.clamp(self.matched_count as usize);
+        }
         self.results = self
             .matcher
             .results(self.win.height as u32, self.win.offset as u32);
@@ -294,7 +327,13 @@ impl MailScreen {
         let items: Vec<ListItem> = self
             .results
             .iter()
-            .map(|entry| ListItem::new(highlighted_line("✉  ", &entry.matched_string, &entry.match_indices)))
+            .map(|entry| {
+                ListItem::new(highlighted_line(
+                    self.row_icon(&entry.inner),
+                    &entry.matched_string,
+                    &entry.match_indices,
+                ))
+            })
             .collect();
 
         let mut state = ListState::default().with_selected(Some(self.win.cursor));
@@ -358,7 +397,13 @@ impl MailScreen {
         let items: Vec<ListItem> = self
             .results
             .iter()
-            .map(|entry| ListItem::new(highlighted_line("✉  ", &entry.matched_string, &entry.match_indices)))
+            .map(|entry| {
+                ListItem::new(highlighted_line(
+                    self.row_icon(&entry.inner),
+                    &entry.matched_string,
+                    &entry.match_indices,
+                ))
+            })
             .collect();
 
         let mut state = ListState::default().with_selected(Some(self.win.cursor));
@@ -460,6 +505,7 @@ mod tests {
             date: "2026-07-13T12:00:00Z".into(),
             preview: "preview".into(),
             folder_id: None,
+            is_read: false,
         }
     }
 
@@ -529,7 +575,6 @@ mod tests {
             name: id.into(),
             parent_id: None,
             role: None,
-            sort_order: 0,
             total_emails: 0,
             unread_emails: 0,
             display_name: id.into(),
@@ -552,7 +597,6 @@ mod tests {
             name: "Inbox".into(),
             parent_id: None,
             role: Some("inbox".into()),
-            sort_order: 0,
             total_emails: 0,
             unread_emails: 0,
             display_name: "Inbox".into(),

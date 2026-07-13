@@ -167,6 +167,10 @@ pub fn render(
             format!("  {}", t.text),
             Style::default().fg(color),
         ));
+
+        if !busy && t.text == "Connected" {
+            spans.push(Span::styled(" •", Style::default().fg(Color::Green)));
+        }
     }
 
     if busy {

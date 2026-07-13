@@ -20,6 +20,7 @@ impl Date {
     }
 
     /// Parse the date part of an ISO 8601 string ("YYYY-MM-DD...").
+    #[allow(dead_code)]
     pub fn from_iso(s: &str) -> Option<Date> {
         let s = s.get(..10)?;
         let mut parts = s.split('-');

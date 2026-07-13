@@ -68,6 +68,10 @@ impl ListWindow {
         if index < self.offset || index >= self.offset + self.height {
             self.offset = index.saturating_sub(self.height / 2);
         }
+        // Cap the offset before deriving the cursor, so a jump near the end
+        // of the list still selects `index` (clamp alone would move the
+        // window but leave the cursor on a different item).
+        self.offset = self.offset.min(total.saturating_sub(self.height));
         self.cursor = index - self.offset.min(index);
         self.clamp(total);
     }
