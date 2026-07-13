@@ -7,18 +7,22 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use unicode_width::UnicodeWidthStr;
 
-use crate::tui::app::App;
 use crate::tui::event::InputMode;
+use crate::tui::state::App;
+
+/// Display width of the search prompt ("❯ ").
+const PROMPT_WIDTH: u16 = 2;
 
 /// Draw the search input bar.
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let title = format!(" {} ", app.context_title());
 
     let border_color = match app.input_mode {
-        InputMode::Insert => Color::Cyan,
+        InputMode::Search => Color::Cyan,
         InputMode::Normal => Color::DarkGray,
-        InputMode::EmailOpen => Color::Magenta,
+        InputMode::Overlay => Color::Magenta,
         InputMode::Editing => Color::Green,
         InputMode::Confirm(_) => Color::Red,
     };
@@ -48,15 +52,15 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 .bg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         ),
-        InputMode::Insert => (
-            " INS ",
+        InputMode::Search => (
+            " SRC ",
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         ),
-        InputMode::EmailOpen => (
-            " MAIL",
+        InputMode::Overlay => (
+            " POP ",
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Magenta)
@@ -88,9 +92,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let input_line = Line::from(vec![prompt, query]);
     frame.render_widget(Paragraph::new(input_line), input_area);
 
-    // Show cursor only in Insert mode
-    if app.input_mode == InputMode::Insert {
-        let cursor_x = input_area.x + 2 + app.input.len() as u16;
+    // Show cursor only in Search mode
+    if app.input_mode == InputMode::Search {
+        let cursor_x = input_area.x + PROMPT_WIDTH + app.input.width() as u16;
         let cursor_y = input_area.y;
         frame.set_cursor_position((cursor_x.min(input_area.right().saturating_sub(1)), cursor_y));
     }
