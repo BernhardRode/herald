@@ -18,16 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           token: ${{ secrets.HERMES_TOKEN }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f # stable
 
       - name: Install git-cliff
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@17faf20d2e8f0e345a0e2d109a7d2ef81e183988 # v2.49.5
         with:
           tool: git-cliff
 
@@ -55,8 +55,6 @@ jobs:
           # Exclude ci/chore/docs/build scopes — they don't warrant a release
           HAS_BREAKING=$(git log "$RANGE" --format="%s" | grep -c "^.*!:" || true)
           HAS_FEAT=$(git log "$RANGE" --format="%s" | grep -c "^feat" || true)
-          HAS_FIX=$(git log "$RANGE" --format="%s" | grep -Ec "^fix(\([^)]*\))?:" | grep -v "^fix(ci)" | grep -v "^fix(deps)" | wc -l || true)
-          # More robust: count fix commits that are NOT ci/docs/build/chore scoped
           HAS_FIX=$(git log "$RANGE" --format="%s" | grep "^fix" | grep -vcE "^fix\((ci|deps|build|docs|chore)\)" || true)
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
@@ -162,7 +160,7 @@ jobs:
       contains(github.event.head_commit.message, 'chore: release v')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           token: ${{ secrets.HERMES_TOKEN }}
