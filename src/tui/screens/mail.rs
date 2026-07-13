@@ -224,7 +224,7 @@ impl MailScreen {
     pub fn render(&mut self, frame: &mut Frame, area: Rect, focused_chrome: bool) {
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .constraints([Constraint::Percentage(33), Constraint::Percentage(67)])
             .split(area);
 
         let list_height = chunks[0].height.saturating_sub(2) as usize;

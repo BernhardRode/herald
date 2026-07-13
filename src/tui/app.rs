@@ -472,8 +472,14 @@ impl App {
                         position: 0,
                     });
                 }
+                // Tick matcher immediately to process the query on the current data
+                self.mail.tick();
             }
-            Screen::Contacts => self.contacts.set_query(query),
+            Screen::Contacts => {
+                self.contacts.set_query(query);
+                // Tick matcher immediately to process the query on the current data
+                // (contacts don't use the matcher yet, but this keeps consistency)
+            }
             Screen::Calendar => {}
         }
     }
