@@ -27,7 +27,7 @@ jobs:
         uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f # stable
 
       - name: Install git-cliff
-        uses: taiki-e/install-action@17faf20d2e8f0e345a0e2d109a7d2ef81e183988 # v2.49.5
+        uses: taiki-e/install-action@019e22100565643c6890fe3f00da0b63017c1672 # v2.49.5
         with:
           tool: git-cliff
 
