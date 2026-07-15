@@ -65,11 +65,11 @@ jobs:
         # failing. otherwise `sh` won't catch that `curl` returned non-0
         shell: bash
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh"
-       - name: Cache dist
-         uses: actions/upload-artifact@v4
-         with:
-           name: cargo-dist-cache
-           path: ~/.cargo/bin/dist
+      - name: Cache dist
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-dist-cache
+          path: ~/.cargo/bin/dist
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -81,11 +81,11 @@ jobs:
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
-       - name: "Upload dist-manifest.json"
-         uses: actions/upload-artifact@v4
-         with:
-           name: artifacts-plan-dist-manifest
-           path: plan-dist-manifest.json
+      - name: "Upload dist-manifest.json"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: artifacts-plan-dist-manifest
+          path: plan-dist-manifest.json
 
   # Build and packages all the platform-specific things
   build-local-artifacts:
@@ -131,7 +131,7 @@ jobs:
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
       - name: Fetch local artifacts
-        uses: actions/download-artifact@3e5f45b5a0093cf66dcbf5bfa4c1250e2af82809 # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -157,11 +157,11 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-       - name: "Upload artifacts"
-         uses: actions/upload-artifact@v4
-         with:
-           name: artifacts-build-local-${{ join(matrix.targets, '_') }}
-           path: |
+      - name: "Upload artifacts"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: artifacts-build-local-${{ join(matrix.targets, '_') }}
+          path: |
              ${{ steps.cargo-dist.outputs.paths }}
              ${{ env.BUILD_MANIFEST_NAME }}
 
@@ -180,14 +180,14 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - name: Install cached dist
-        uses: actions/download-artifact@3e5f45b5a0093cf66dcbf5bfa4c1250e2af82809 # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
       - name: Fetch local artifacts
-        uses: actions/download-artifact@3e5f45b5a0093cf66dcbf5bfa4c1250e2af82809 # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -204,11 +204,11 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-       - name: "Upload artifacts"
-         uses: actions/upload-artifact@v4
-         with:
-           name: artifacts-build-global
-           path: |
+      - name: "Upload artifacts"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: artifacts-build-global
+          path: |
              ${{ steps.cargo-dist.outputs.paths }}
              ${{ env.BUILD_MANIFEST_NAME }}
   # Determines if we should publish/announce
@@ -230,14 +230,14 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - name: Install cached dist
-        uses: actions/download-artifact@3e5f45b5a0093cf66dcbf5bfa4c1250e2af82809 # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Fetch artifacts from scratch-storage
       - name: Fetch artifacts
-        uses: actions/download-artifact@3e5f45b5a0093cf66dcbf5bfa4c1250e2af82809 # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -250,14 +250,14 @@ jobs:
           cat dist-manifest.json
           echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@043fb4652f78ddd2a1c2b3b5ec3f4e36a0a0a5af # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
           path: dist-manifest.json
       # Create a GitHub Release while uploading all files to it
       - name: "Download GitHub Artifacts"
-        uses: actions/download-artifact@3e5f45b5a0093cf66dcbf5bfa4c1250e2af82809 # v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: artifacts-*
           path: artifacts

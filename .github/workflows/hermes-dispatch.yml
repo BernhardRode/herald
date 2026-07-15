@@ -29,7 +29,7 @@ jobs:
           toolchain: stable
 
       - name: Install git-cliff
-        uses: taiki-e/install-action@019e22100565643c6890fe3f00da0b63017c1672 # v2.49.5
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2.83.2
         with:
           tool: git-cliff
 
