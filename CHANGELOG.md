@@ -1,10 +1,14 @@
-## [0.3.1] - 2026-07-15
+## [0.3.2] - 2026-07-15
 
 ### 🐛 Bug Fixes
 
 - Update actions/upload-artifact to v4
 - Correct taiki-e/install-action SHA for v2.49.5
 - Pin rust-toolchain to stable explicitly
+
+### ⚙️ Miscellaneous Tasks
+
+- Release v0.3.1
 ## [0.3.0] - 2026-07-13
 
 ### 🚀 Features
