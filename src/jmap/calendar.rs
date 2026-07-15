@@ -1,6 +1,7 @@
 //! Calendar operations and time helpers.
 
 use jmap_base_client::JmapClient;
+use jmap_mail_client::JmapMailExt;
 use serde_json::json;
 
 use super::{check_set_response, JmapResult};
@@ -87,6 +88,184 @@ pub async fn create_event(
     );
     let resp = client.call(session.api_url.as_str(), &request).await?;
     check_set_response(&resp, "CalendarEvent/set", "notCreated")
+}
+
+/// A calendar event to create, with optional scheduling (invite) fields.
+///
+/// When `attendees` is non-empty the event is created with `isDraft: false`
+/// and a `participants`/`replyTo` block, which makes the server send iMIP
+/// scheduling invitations to each attendee.
+pub struct NewEvent<'a> {
+    pub title: &'a str,
+    /// Local start time, e.g. `2026-07-16T08:30:00`. Empty defaults to now.
+    pub start: &'a str,
+    /// ISO 8601 duration, e.g. `PT15M`. Empty defaults to `PT1H`.
+    pub duration: &'a str,
+    /// Calendar id to file the event under. `None` uses the account default.
+    pub calendar_id: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub location: Option<&'a str>,
+    /// IANA time zone, e.g. `Europe/Berlin`.
+    pub time_zone: Option<&'a str>,
+    pub all_day: bool,
+    /// Attendee email addresses to invite.
+    pub attendees: &'a [String],
+    /// Organizer address. `None` derives it from the primary mail identity.
+    pub organizer: Option<&'a str>,
+}
+
+/// Create a calendar event, optionally inviting attendees.
+///
+/// See [`NewEvent`] for the scheduling semantics.
+pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapResult<()> {
+    let session = client.fetch_session().await?;
+    let account_id = session
+        .primary_account_id("urn:ietf:params:jmap:calendars")
+        .ok_or("no primary calendars account in session")?;
+
+    let start = if ev.start.trim().is_empty() {
+        utc_now_iso8601()
+    } else {
+        ev.start.trim().to_string()
+    };
+    let duration = if ev.duration.trim().is_empty() {
+        "PT1H".to_string()
+    } else {
+        ev.duration.trim().to_string()
+    };
+
+    let mut event = serde_json::Map::new();
+    event.insert("@type".into(), json!("Event"));
+    event.insert("title".into(), json!(ev.title));
+    event.insert("start".into(), json!(start));
+    if ev.all_day {
+        event.insert("showWithoutTime".into(), json!(true));
+    } else {
+        event.insert("duration".into(), json!(duration));
+    }
+    if let Some(tz) = ev.time_zone.map(str::trim).filter(|s| !s.is_empty()) {
+        event.insert("timeZone".into(), json!(tz));
+    }
+    if let Some(desc) = ev.description.map(str::trim).filter(|s| !s.is_empty()) {
+        event.insert("description".into(), json!(desc));
+    }
+    if let Some(loc) = ev.location.map(str::trim).filter(|s| !s.is_empty()) {
+        event.insert(
+            "locations".into(),
+            json!({ "loc1": { "@type": "Location", "name": loc } }),
+        );
+    }
+    if let Some(cal) = ev.calendar_id.map(str::trim).filter(|s| !s.is_empty()) {
+        event.insert("calendarIds".into(), json!({ cal: true }));
+    }
+
+    // Scheduling: with attendees, build participants and let the server send
+    // iMIP invites by clearing the draft flag.
+    let attendees: Vec<&str> = ev
+        .attendees
+        .iter()
+        .map(|a| a.trim())
+        .filter(|a| !a.is_empty())
+        .collect();
+    if !attendees.is_empty() {
+        let organizer = match ev.organizer.map(str::trim).filter(|s| !s.is_empty()) {
+            Some(o) => o.to_string(),
+            None => default_identity_email(client, &session).await?,
+        };
+
+        let mut participants = serde_json::Map::new();
+        participants.insert(
+            "owner".into(),
+            json!({
+                "@type": "Participant",
+                "email": organizer,
+                "sendTo": { "imip": format!("mailto:{organizer}") },
+                "roles": { "owner": true, "attendee": true },
+                "participationStatus": "accepted",
+                "expectReply": false,
+            }),
+        );
+        for (i, addr) in attendees.iter().enumerate() {
+            participants.insert(
+                format!("a{i}"),
+                json!({
+                    "@type": "Participant",
+                    "email": addr,
+                    "sendTo": { "imip": format!("mailto:{addr}") },
+                    "roles": { "attendee": true },
+                    "participationStatus": "needs-action",
+                    "expectReply": true,
+                }),
+            );
+        }
+        event.insert("participants".into(), json!(participants));
+        event.insert(
+            "replyTo".into(),
+            json!({ "imip": format!("mailto:{organizer}") }),
+        );
+        event.insert("isDraft".into(), json!(false));
+    }
+
+    let request_args = json!({
+        "accountId": account_id,
+        "create": { "new1": event }
+    });
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:calendars".to_string(),
+        ],
+        vec![(
+            "CalendarEvent/set".to_string(),
+            request_args,
+            "create1".to_string(),
+        )],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+    check_set_response(&resp, "CalendarEvent/set", "notCreated")
+}
+
+/// Cancel an event: set its status to `cancelled`, which prompts the server to
+/// send cancellation notices to attendees.
+pub async fn cancel_event(client: &JmapClient, event_id: &str) -> JmapResult<()> {
+    let session = client.fetch_session().await?;
+    let account_id = session
+        .primary_account_id("urn:ietf:params:jmap:calendars")
+        .ok_or("no primary calendars account in session")?;
+
+    let request_args = json!({
+        "accountId": account_id,
+        "update": { event_id: { "status": "cancelled" } }
+    });
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:calendars".to_string(),
+        ],
+        vec![(
+            "CalendarEvent/set".to_string(),
+            request_args,
+            "cancel1".to_string(),
+        )],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+    check_set_response(&resp, "CalendarEvent/set", "notUpdated")
+}
+
+/// Derive an organizer address from the account's primary mail identity.
+async fn default_identity_email(
+    client: &JmapClient,
+    session: &jmap_base_client::Session,
+) -> JmapResult<String> {
+    let sc = client.with_mail_session(session.clone());
+    let identities = sc.identity_get(None, None).await?;
+    identities
+        .list
+        .first()
+        .map(|id| id.email.clone())
+        .ok_or_else(|| "no mail identity found to use as organizer; pass --organizer".into())
 }
 
 /// Update a calendar event's title, start, and duration in place.

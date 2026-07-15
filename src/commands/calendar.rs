@@ -1,14 +1,17 @@
-//! `herald calendar` subcommands — list calendars, list events.
+//! `herald calendar` subcommands — list calendars, list events, and create,
+//! update, cancel, or delete events (including sending invites).
 
 use clap::Subcommand;
 use jmap_base_client::JmapClient;
 use jmap_calendars_client::JmapCalendarsExt;
 use jmap_calendars_types::{CalendarEventComparator, CalendarEventFilterCondition};
 
-use crate::jmap::calendar::utc_now_iso8601;
+use crate::jmap::calendar::{self, utc_now_iso8601, NewEvent};
 use crate::text::{sanitize_display, truncate_str};
 
 #[derive(Debug, Subcommand)]
+// This is a construct-once CLI arg enum; variant size is irrelevant.
+#[allow(clippy::large_enum_variant)]
 pub enum CalendarCommand {
     /// List calendars
     Calendars,
@@ -21,6 +24,75 @@ pub enum CalendarCommand {
         #[arg(long)]
         all: bool,
     },
+    /// Create, update, cancel, or delete a single event
+    Event {
+        #[command(subcommand)]
+        action: EventCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum EventCommand {
+    /// Create an event, optionally inviting attendees
+    Create {
+        /// Event title
+        #[arg(long)]
+        title: String,
+        /// Local start time, e.g. 2026-07-16T08:30:00 (defaults to now)
+        #[arg(long, default_value = "")]
+        start: String,
+        /// ISO 8601 duration, e.g. PT15M, PT1H (default PT1H)
+        #[arg(long, default_value = "")]
+        duration: String,
+        /// Calendar ID to file the event under (default: account default)
+        #[arg(long)]
+        calendar: Option<String>,
+        /// Attendee email to invite (repeatable). Sends an invitation.
+        #[arg(long = "attendee")]
+        attendees: Vec<String>,
+        /// Organizer address (defaults to your primary mail identity)
+        #[arg(long)]
+        organizer: Option<String>,
+        /// Event description
+        #[arg(long)]
+        description: Option<String>,
+        /// Event location
+        #[arg(long)]
+        location: Option<String>,
+        /// IANA time zone, e.g. Europe/Berlin
+        #[arg(long)]
+        timezone: Option<String>,
+        /// Mark as an all-day event
+        #[arg(long)]
+        all_day: bool,
+    },
+    /// Update an event's title, start, or duration
+    Update {
+        /// Event ID
+        #[arg(long)]
+        id: String,
+        /// New title
+        #[arg(long, default_value = "")]
+        title: String,
+        /// New start time
+        #[arg(long, default_value = "")]
+        start: String,
+        /// New duration
+        #[arg(long, default_value = "")]
+        duration: String,
+    },
+    /// Cancel an event and notify attendees
+    Cancel {
+        /// Event ID
+        #[arg(long)]
+        id: String,
+    },
+    /// Delete an event
+    Delete {
+        /// Event ID
+        #[arg(long)]
+        id: String,
+    },
 }
 
 pub async fn handle(
@@ -30,6 +102,68 @@ pub async fn handle(
     match cmd {
         CalendarCommand::Calendars => list_calendars(client).await?,
         CalendarCommand::Events { limit, all } => list_events(client, *limit, *all).await?,
+        CalendarCommand::Event { action } => handle_event(client, action).await?,
+    }
+    Ok(())
+}
+
+async fn handle_event(
+    client: &JmapClient,
+    action: &EventCommand,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    match action {
+        EventCommand::Create {
+            title,
+            start,
+            duration,
+            calendar,
+            attendees,
+            organizer,
+            description,
+            location,
+            timezone,
+            all_day,
+        } => {
+            let ev = NewEvent {
+                title,
+                start,
+                duration,
+                calendar_id: calendar.as_deref(),
+                description: description.as_deref(),
+                location: location.as_deref(),
+                time_zone: timezone.as_deref(),
+                all_day: *all_day,
+                attendees,
+                organizer: organizer.as_deref(),
+            };
+            calendar::create_event_full(client, &ev).await?;
+            if attendees.is_empty() {
+                println!("✓ Event created: {}", sanitize_display(title));
+            } else {
+                println!(
+                    "✓ Event created and invited {} attendee(s): {}",
+                    attendees.len(),
+                    sanitize_display(title)
+                );
+            }
+        }
+        EventCommand::Update {
+            id,
+            title,
+            start,
+            duration,
+        } => {
+            calendar::update_event(client, id, title, start, duration).await?;
+            println!("✓ Event updated: {}", sanitize_display(id));
+        }
+        EventCommand::Cancel { id } => {
+            calendar::cancel_event(client, id).await?;
+            println!("✓ Event cancelled: {}", sanitize_display(id));
+        }
+        EventCommand::Delete { id } => {
+            calendar::delete_event(client, id).await?;
+            println!("✓ Event deleted: {}", sanitize_display(id));
+        }
     }
     Ok(())
 }

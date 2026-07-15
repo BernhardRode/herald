@@ -1,4 +1,5 @@
-//! `herald mail` subcommands — send, mailboxes, list, read, move, folder-delete.
+//! `herald mail` subcommands — send, mailboxes, list, read, move,
+//! folder-delete, mark-read, mark-unread, delete.
 
 mod list;
 mod read;
@@ -66,6 +67,24 @@ pub enum MailCommand {
         #[arg(long)]
         force: bool,
     },
+    /// Mark an email as read
+    MarkRead {
+        /// Email ID
+        #[arg(long)]
+        id: String,
+    },
+    /// Mark an email as unread
+    MarkUnread {
+        /// Email ID
+        #[arg(long)]
+        id: String,
+    },
+    /// Permanently delete an email
+    Delete {
+        /// Email ID
+        #[arg(long)]
+        id: String,
+    },
 }
 
 pub async fn handle(
@@ -86,6 +105,21 @@ pub async fn handle(
         MailCommand::Watch { folder, all } => watch::watch(client, folder.as_deref(), *all).await,
         MailCommand::Move { from, to } => handle_move(client, from, to).await,
         MailCommand::FolderDelete { id, force } => handle_folder_delete(client, id, *force).await,
+        MailCommand::MarkRead { id } => {
+            mail::mark_read(client, id).await?;
+            println!("✓ Marked as read: {}", sanitize_display(id));
+            Ok(())
+        }
+        MailCommand::MarkUnread { id } => {
+            mail::mark_unread(client, id).await?;
+            println!("✓ Marked as unread: {}", sanitize_display(id));
+            Ok(())
+        }
+        MailCommand::Delete { id } => {
+            mail::delete_email(client, id).await?;
+            println!("✓ Email deleted: {}", sanitize_display(id));
+            Ok(())
+        }
     }
 }
 
