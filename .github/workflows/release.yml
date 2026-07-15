@@ -39,7 +39,9 @@ permissions:
 # If there's a prerelease-style suffix to the version, then the release(s)
 # will be marked as a prerelease.
 on:
-  pull_request:
+  # NOTE: cargo-dist normally adds a `pull_request:` dry-run trigger here.
+  # It's intentionally omitted so this pipeline only runs on release tags.
+  # `dist generate` will re-add it — remove it again after regenerating.
   push:
     tags:
       - '**[0-9]+.[0-9]+.[0-9]+*'
@@ -308,6 +310,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f # stable
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Publish herald-jmap-stalwart
         run: cargo publish -p herald-jmap-stalwart --allow-dirty || true
         env:
