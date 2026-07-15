@@ -1,4 +1,20 @@
+## [0.3.3] - 2026-07-15
+
+### 🐛 Bug Fixes
+
+- Repair workflow YAML indentation and update actions to latest
+- Add explicit toolchain input to all rust-toolchain steps
+- *(tui)* Resolve clippy collapsible_match in event reader
+
+### 🎨 Styling
+
+- Apply cargo fmt
 ## [0.3.2] - 2026-07-15
+
+### ⚙️ Miscellaneous Tasks
+
+- Release v0.3.2
+## [0.3.1] - 2026-07-15
 
 ### 🐛 Bug Fixes
 
