@@ -75,12 +75,17 @@ impl ContactsScreen {
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(area);
 
-        self.win.set_height(chunks[0].height.saturating_sub(2) as usize);
+        self.win
+            .set_height(chunks[0].height.saturating_sub(2) as usize);
         let filtered_len = self.filtered().len();
         self.win.clamp(filtered_len);
         let filtered = self.filtered();
 
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
         let visible = self.win.offset..(self.win.offset + self.win.height).min(filtered.len());
         let items: Vec<ListItem> = filtered[visible]
             .iter()
@@ -91,7 +96,10 @@ impl ContactsScreen {
                     c.email.clone()
                 };
                 ListItem::new(Line::from(vec![
-                    Span::styled("<0xF0><0x9F><0x93><0x87> ", Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        "<0xF0><0x9F><0x93><0x87> ",
+                        Style::default().fg(Color::Cyan),
+                    ),
                     Span::styled(label, Style::default().fg(Color::White)),
                 ]))
             })

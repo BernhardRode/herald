@@ -47,9 +47,11 @@ pub async fn watch(
 
     let (tx, mut rx) = unbounded_channel();
     let watcher = client.clone();
-    tokio::spawn(jmap::push::watch_state_changes(watcher, "Email", move |change| {
-        tx.send(change).is_ok()
-    }));
+    tokio::spawn(jmap::push::watch_state_changes(
+        watcher,
+        "Email",
+        move |change| tx.send(change).is_ok(),
+    ));
 
     match &target {
         Some((_, name)) => println!("Watching {} — Ctrl-C to stop", sanitize_display(name)),

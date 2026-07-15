@@ -115,7 +115,10 @@ pub async fn update_contact(
     );
 
     let mut update = std::collections::HashMap::new();
-    update.insert(jmap_types::Id::from(contact_id), PatchObject::from_map(patch));
+    update.insert(
+        jmap_types::Id::from(contact_id),
+        PatchObject::from_map(patch),
+    );
 
     let resp = sc.contact_card_set(None, Some(update), None).await?;
     if let Some(not_updated) = &resp.not_updated {

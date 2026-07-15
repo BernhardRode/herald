@@ -3,7 +3,7 @@
 //! only sends commands and consumes result events.
 
 use std::collections::HashMap;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use crossterm::event::KeyEventKind;
 use ratatui::layout::Rect;
@@ -200,7 +200,8 @@ impl App {
                 all_folders,
             } => {
                 self.busy = self.busy.saturating_sub(1);
-                self.mail.on_mails_loaded(mails.clone(), *position, *all_folders);
+                self.mail
+                    .on_mails_loaded(mails.clone(), *position, *all_folders);
             }
             Event::MailBodyLoaded(full) => {
                 self.busy = self.busy.saturating_sub(1);
@@ -592,9 +593,7 @@ impl App {
                         self.mail.focus = MailFocus::Folders;
                         // park the folder cursor on the active folder
                         if let Some(id) = &self.mail.active_folder_id {
-                            if let Some(pos) =
-                                self.mail.folders.iter().position(|f| &f.id == id)
-                            {
+                            if let Some(pos) = self.mail.folders.iter().position(|f| &f.id == id) {
                                 let total = self.mail.folders.len();
                                 self.mail.folder_win.select(pos, total);
                             }
@@ -649,7 +648,7 @@ impl App {
                 }
                 MailFocus::List => self.open_mail_popup(),
                 MailFocus::SearchResults => self.open_mail_popup(),
-                MailFocus::Account => {}, // Account view has no items to open
+                MailFocus::Account => {} // Account view has no items to open
             },
             Screen::Contacts => {
                 if let Some(c) = self.contacts.selected() {
@@ -750,7 +749,10 @@ impl App {
             }
             Screen::Calendar => {
                 let mut form = Form::new(&["Title", "Start", "Duration"], false);
-                form.set_field("Start", &format!("{}T09:00:00", self.calendar.selected.iso()));
+                form.set_field(
+                    "Start",
+                    &format!("{}T09:00:00", self.calendar.selected.iso()),
+                );
                 form.set_field("Duration", "PT1H");
                 self.open_editor(Popup::editor(
                     PopupKind::EventForm { event_id: None },
@@ -765,8 +767,12 @@ impl App {
         match self.screen {
             Screen::Contacts => {
                 if let Some(c) = self.contacts.selected() {
-                    let (id, name, email, phone) =
-                        (c.id.clone(), c.name.clone(), c.email.clone(), c.phone.clone());
+                    let (id, name, email, phone) = (
+                        c.id.clone(),
+                        c.name.clone(),
+                        c.email.clone(),
+                        c.phone.clone(),
+                    );
                     let mut form = Form::new(&["Name", "Email", "Phone"], false);
                     form.set_field("Name", &name);
                     form.set_field("Email", &email);
@@ -784,8 +790,12 @@ impl App {
             }
             Screen::Calendar => {
                 if let Some(e) = self.calendar.selected_event() {
-                    let (id, title, start, duration) =
-                        (e.id.clone(), e.title.clone(), e.start.clone(), e.duration.clone());
+                    let (id, title, start, duration) = (
+                        e.id.clone(),
+                        e.title.clone(),
+                        e.start.clone(),
+                        e.duration.clone(),
+                    );
                     let mut form = Form::new(&["Title", "Start", "Duration"], false);
                     form.set_field("Title", &title);
                     form.set_field("Start", &start);
@@ -972,7 +982,9 @@ impl App {
                     format!("Fwd: {subject}")
                 },
             );
-            form.set_body(&format!("{sig}\n\n---------- Forwarded message ----------\n{quoted}"));
+            form.set_body(&format!(
+                "{sig}\n\n---------- Forwarded message ----------\n{quoted}"
+            ));
             (
                 PopupKind::Forward {
                     email_id: id.clone(),
@@ -1103,7 +1115,9 @@ impl App {
             body.push(Line::from(vec![
                 Span::styled(
                     format!("{key:<16}"),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(desc.to_string()),
             ]));
@@ -1185,10 +1199,7 @@ impl App {
         let line = Line::from(vec![
             Span::styled("❯ ", Style::default().fg(Color::Cyan)),
             Span::styled(query.clone(), Style::default().fg(Color::White)),
-            Span::styled(
-                format!("   {count}"),
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(format!("   {count}"), Style::default().fg(Color::DarkGray)),
         ]);
         frame.render_widget(Paragraph::new(line), area);
         frame.set_cursor_position((area.x + 2 + query.chars().count() as u16, area.y));
@@ -1371,8 +1382,14 @@ mod tests {
             phone: String::new(),
         }]);
         app.handle_command(Command::DeleteItem);
-        assert_eq!(app.confirm, Some(PendingConfirm::DeleteContact("c1".into())));
-        assert!(drain(&mut rx).is_empty(), "nothing sent before confirmation");
+        assert_eq!(
+            app.confirm,
+            Some(PendingConfirm::DeleteContact("c1".into()))
+        );
+        assert!(
+            drain(&mut rx).is_empty(),
+            "nothing sent before confirmation"
+        );
         app.handle_command(Command::ConfirmYes);
         assert_eq!(drain(&mut rx), vec![Command::DeleteContact("c1".into())]);
     }
@@ -1431,7 +1448,10 @@ mod tests {
         app.screen = Screen::Calendar;
         app.handle_command(Command::CreateItem);
         let form = app.popups.focused_popup().unwrap().form.as_ref().unwrap();
-        assert!(form.field("Start").contains('T'), "start prefilled from grid");
+        assert!(
+            form.field("Start").contains('T'),
+            "start prefilled from grid"
+        );
         assert_eq!(form.field("Duration"), "PT1H");
         // title required
         app.handle_command(Command::Submit);

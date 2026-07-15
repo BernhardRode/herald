@@ -85,9 +85,7 @@ pub async fn handle(
         MailCommand::Read { id } => read::read_email(client, id).await,
         MailCommand::Watch { folder, all } => watch::watch(client, folder.as_deref(), *all).await,
         MailCommand::Move { from, to } => handle_move(client, from, to).await,
-        MailCommand::FolderDelete { id, force } => {
-            handle_folder_delete(client, id, *force).await
-        }
+        MailCommand::FolderDelete { id, force } => handle_folder_delete(client, id, *force).await,
     }
 }
 
@@ -128,7 +126,11 @@ async fn handle_folder_delete(
     println!(
         "Deleting mailbox {}{}...",
         sanitize_display(mailbox_id),
-        if force { " (force: removing emails)" } else { "" }
+        if force {
+            " (force: removing emails)"
+        } else {
+            ""
+        }
     );
     mail::destroy_mailbox(client, mailbox_id, force).await?;
     println!("✓ Mailbox deleted");

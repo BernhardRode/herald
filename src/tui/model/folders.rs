@@ -76,7 +76,9 @@ fn role_priority(role: Option<&str>) -> u8 {
 }
 
 /// The actions with their config override, JMAP role, and default name.
-fn actions(mappings: &FolderMappings) -> [(&'static str, Option<&str>, &'static str, &'static str); 6] {
+fn actions(
+    mappings: &FolderMappings,
+) -> [(&'static str, Option<&str>, &'static str, &'static str); 6] {
     [
         ("inbox", None, "inbox", "Inbox"),
         ("drafts", None, "drafts", "Drafts"),
@@ -110,14 +112,17 @@ pub fn resolve_action_folder(
 /// Resolve a folder by name or slash-separated path (e.g. "Archive/2026").
 pub fn resolve_folder_path(folders: &[FolderEntry], path: &str) -> Option<String> {
     if !path.contains('/') {
-        return folders.iter().find(|f| f.name == path).map(|f| f.id.clone());
+        return folders
+            .iter()
+            .find(|f| f.name == path)
+            .map(|f| f.id.clone());
     }
     let segments: Vec<&str> = path.split('/').collect();
     let mut current_parent: Option<String> = None;
     for (i, segment) in segments.iter().enumerate() {
-        let f = folders.iter().find(|f| {
-            f.name == *segment && f.parent_id.as_deref() == current_parent.as_deref()
-        })?;
+        let f = folders
+            .iter()
+            .find(|f| f.name == *segment && f.parent_id.as_deref() == current_parent.as_deref())?;
         if i == segments.len() - 1 {
             return Some(f.id.clone());
         }
@@ -187,7 +192,10 @@ pub fn format_folder(f: &FolderEntry) -> String {
         String::new()
     };
     match f.action_tag.as_deref() {
-        Some(tag) => format!("{}  [{}]  ({}{})", f.display_name, tag, f.total_emails, unread),
+        Some(tag) => format!(
+            "{}  [{}]  ({}{})",
+            f.display_name, tag, f.total_emails, unread
+        ),
         None => format!("{}  ({}{})", f.display_name, f.total_emails, unread),
     }
 }
@@ -242,7 +250,11 @@ mod tests {
     fn config_override_beats_server_role() {
         let folders = build_folder_list(&sample(), &mappings());
         assert_eq!(tag_of(&folders, "sm"), Some("sent"));
-        assert_eq!(tag_of(&folders, "si"), None, "role folder must lose its tag");
+        assert_eq!(
+            tag_of(&folders, "si"),
+            None,
+            "role folder must lose its tag"
+        );
         assert_eq!(tag_of(&folders, "dm"), Some("trash"));
         assert_eq!(tag_of(&folders, "di"), None);
     }

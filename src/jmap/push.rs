@@ -71,7 +71,10 @@ async fn open_stream(
     types: &str,
     last_event_id: Option<&str>,
 ) -> Result<
-    futures::stream::BoxStream<'static, Result<jmap_base_client::SseFrame, jmap_base_client::ClientError>>,
+    futures::stream::BoxStream<
+        'static,
+        Result<jmap_base_client::SseFrame, jmap_base_client::ClientError>,
+    >,
     Box<dyn std::error::Error + Send + Sync>,
 > {
     let session = client.fetch_session().await?;

@@ -271,7 +271,10 @@ mod tests {
 
     #[test]
     fn popup_submit_and_close() {
-        assert_eq!(map_key(key(KeyCode::Char('s')), KeyMode::Popup), Command::Submit);
+        assert_eq!(
+            map_key(key(KeyCode::Char('s')), KeyMode::Popup),
+            Command::Submit
+        );
         assert_eq!(
             map_key(key(KeyCode::Char('x')), KeyMode::Popup),
             Command::ClosePopup

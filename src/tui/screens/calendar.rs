@@ -92,7 +92,11 @@ impl CalendarScreen {
     }
 
     fn render_grid(&self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
         let today = Date::today();
 
         let mut lines: Vec<Line> = vec![Line::from(Span::styled(
@@ -178,8 +182,8 @@ impl CalendarScreen {
             })
             .collect();
 
-        let weekday = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            [self.selected.weekday() as usize];
+        let weekday =
+            ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][self.selected.weekday() as usize];
         let title = format!(
             " {weekday} {} {} — {} event{} ",
             self.selected.day,
@@ -288,6 +292,9 @@ mod tests {
             day: 13,
         });
         s.on_loaded(vec![ev("a", "", "no start")]);
-        assert!(s.agenda().is_empty(), "event without a date is not on any day");
+        assert!(
+            s.agenda().is_empty(),
+            "event without a date is not on any day"
+        );
     }
 }

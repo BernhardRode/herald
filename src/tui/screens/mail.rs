@@ -250,7 +250,7 @@ impl MailScreen {
             MailFocus::Folders => {
                 self.folder_win.select_prev();
             }
-            MailFocus::Account => {}, // Account has no list
+            MailFocus::Account => {} // Account has no list
         }
     }
 
@@ -259,7 +259,11 @@ impl MailScreen {
         self.folders
             .iter()
             .find(|f| f.action_tag.as_deref() == Some("inbox"))
-            .or_else(|| self.folders.iter().find(|f| f.role.as_deref() == Some("inbox")))
+            .or_else(|| {
+                self.folders
+                    .iter()
+                    .find(|f| f.role.as_deref() == Some("inbox"))
+            })
     }
 
     /// Whether the list currently shows the inbox (default view counts).
@@ -300,12 +304,13 @@ impl MailScreen {
     }
 
     fn render_account(&self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
         let lines = vec![
-            Line::from(Span::styled(
-                "📌 Profile",
-                Style::default().fg(Color::Cyan),
-            )),
+            Line::from(Span::styled("📌 Profile", Style::default().fg(Color::Cyan))),
             Line::from(""),
             Line::from("Current profile (press 'l' to return to mail)"),
         ];
@@ -321,7 +326,11 @@ impl MailScreen {
     }
 
     fn render_search_results(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
         let title = format!(" Search Results ({}) ", self.matched_count);
 
         let items: Vec<ListItem> = self
@@ -355,7 +364,11 @@ impl MailScreen {
     }
 
     fn render_folders(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
         let visible = self.folder_win.offset
             ..(self.folder_win.offset + self.folder_win.height).min(self.folders.len());
         let items: Vec<ListItem> = self.folders[visible.clone()]
@@ -387,7 +400,11 @@ impl MailScreen {
     }
 
     fn render_list(&mut self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
         let title = if self.all_folders {
             format!(" All Mail ({}) ", self.matched_count)
         } else {
@@ -453,7 +470,9 @@ impl MailScreen {
         };
 
         frame.render_widget(
-            Paragraph::new(lines).block(block).wrap(Wrap { trim: false }),
+            Paragraph::new(lines)
+                .block(block)
+                .wrap(Wrap { trim: false }),
             area,
         );
     }
@@ -488,7 +507,10 @@ pub fn highlighted_line(icon: &str, text: &str, indices: &[u32]) -> Line<'static
         run.push(ch);
     }
     if !run.is_empty() {
-        spans.push(Span::styled(run, if in_highlight { highlight } else { normal }));
+        spans.push(Span::styled(
+            run,
+            if in_highlight { highlight } else { normal },
+        ));
     }
     Line::from(spans)
 }
@@ -511,7 +533,13 @@ mod tests {
 
     fn loaded(screen: &mut MailScreen, count: usize, position: usize) {
         let mails = (0..count)
-            .map(|i| mail(&format!("m{}", position + i), "alice", &format!("subj {}", position + i)))
+            .map(|i| {
+                mail(
+                    &format!("m{}", position + i),
+                    "alice",
+                    &format!("subj {}", position + i),
+                )
+            })
             .collect();
         screen.on_mails_loaded(mails, position, false);
         // matcher is async; tick until settled

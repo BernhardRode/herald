@@ -94,10 +94,7 @@ pub async fn send_message(
     // Import into Sent folder (config override > role > drafts > any)
     let mailboxes = sc.mailbox_get(None, None).await?;
     let sent_box = if let Some(override_id) = sent_mailbox_id {
-        mailboxes
-            .list
-            .iter()
-            .find(|m| m.id.as_ref() == override_id)
+        mailboxes.list.iter().find(|m| m.id.as_ref() == override_id)
     } else {
         None
     }
@@ -343,11 +340,7 @@ pub async fn destroy_mailbox(
             "urn:ietf:params:jmap:core".to_string(),
             "urn:ietf:params:jmap:mail".to_string(),
         ],
-        vec![(
-            "Mailbox/set".to_string(),
-            request_args,
-            "del1".to_string(),
-        )],
+        vec![("Mailbox/set".to_string(), request_args, "del1".to_string())],
         None,
     );
     let resp = client.call(session.api_url.as_str(), &request).await?;
@@ -466,7 +459,11 @@ pub async fn fetch_full_email(client: &JmapClient, id: &str) -> JmapResult<FullE
 
     Ok(FullEmail {
         id: email.id.as_ref().to_string(),
-        subject: email.subject.as_deref().unwrap_or("(no subject)").to_string(),
+        subject: email
+            .subject
+            .as_deref()
+            .unwrap_or("(no subject)")
+            .to_string(),
         from,
         to,
         date,

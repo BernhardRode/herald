@@ -82,7 +82,9 @@ pub struct Popup {
 impl Popup {
     pub fn view(kind: PopupKind, title: String, body: Vec<Line<'static>>) -> Self {
         let hint = match kind {
-            PopupKind::MailView { .. } => "r reply · f fwd · a archive · d delete · Esc min · x close",
+            PopupKind::MailView { .. } => {
+                "r reply · f fwd · a archive · d delete · Esc min · x close"
+            }
             PopupKind::EventView { .. } => "e edit · d delete · Esc min · x close",
             PopupKind::Help => "Esc min · x close",
             _ => "Esc min · x close",
@@ -255,13 +257,8 @@ impl Popups {
             if is_focused && editing {
                 if let Some(form) = &popup.form {
                     let (row, col) = form.cursor();
-                    let label_w = form
-                        .fields
-                        .iter()
-                        .map(|f| f.label.len())
-                        .max()
-                        .unwrap_or(0) as u16
-                        + 2; // "Label: "
+                    let label_w =
+                        form.fields.iter().map(|f| f.label.len()).max().unwrap_or(0) as u16 + 2; // "Label: "
                     let x = if form.body_focused() {
                         rect.x + 1 + col
                     } else {
@@ -279,8 +276,17 @@ impl Popups {
     }
 
     fn draw_popup(&self, frame: &mut Frame, popup: &Popup, idx: usize, focused: bool, area: Rect) {
-        let border = if focused { Color::Cyan } else { Color::DarkGray };
-        let title = format!(" [{}] {} {} ", popup_key(idx), popup.kind.icon(), popup.title);
+        let border = if focused {
+            Color::Cyan
+        } else {
+            Color::DarkGray
+        };
+        let title = format!(
+            " [{}] {} {} ",
+            popup_key(idx),
+            popup.kind.icon(),
+            popup.title
+        );
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border).bg(Color::Black))
@@ -347,7 +353,9 @@ fn render_form(form: &Form) -> Vec<Line<'static>> {
         .enumerate()
         .map(|(i, f)| {
             let label_style = if i == form.focus {
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::DarkGray)
             };
@@ -390,7 +398,12 @@ fn popup_areas(area: Rect, count: usize) -> Vec<Rect> {
     let half = inner.width / 2;
     vec![
         Rect::new(inner.x, inner.y, half.saturating_sub(1), inner.height),
-        Rect::new(inner.x + half + 1, inner.y, half.saturating_sub(1), inner.height),
+        Rect::new(
+            inner.x + half + 1,
+            inner.y,
+            half.saturating_sub(1),
+            inner.height,
+        ),
     ]
 }
 
