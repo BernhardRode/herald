@@ -308,8 +308,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f # stable
         with:
           toolchain: stable
-      - name: Publish stalwart-rs
-        run: cargo publish -p stalwart-rs --allow-dirty || true
+      - name: Publish herald-jmap-stalwart
+        run: cargo publish -p herald-jmap-stalwart --allow-dirty || true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATE_IO_API_KEY }}
       - name: Wait for crates.io index

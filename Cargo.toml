@@ -16,7 +16,7 @@ jmap-contacts-types = "0.1"
 jmap-contacts-client = "0.1"
 jmap-calendars-types = "0.1"
 jmap-calendars-client = "0.1"
-stalwart-rs = { path = "crate-stalwart-rs", version = "0.1" }
+herald-jmap-stalwart = { path = "crate-stalwart-rs", version = "0.1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -47,7 +47,7 @@ name = "herald"
 path = "src/main.rs"
 
 [dependencies]
-stalwart-rs = { workspace = true }
+herald-jmap-stalwart = { workspace = true }
 jmap-types = { workspace = true }
 jmap-mail-types = { workspace = true }
 jmap-base-client = { workspace = true }

@@ -3,10 +3,10 @@
 use std::io::{self, Write};
 use std::path::Path;
 
+use herald_jmap_stalwart::{OAuthTokenResponse, StalwartOAuth};
 use jmap_base_client::{BasicAuth, BearerAuth, ClientConfig, DefaultTransport, JmapClient};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use stalwart_rs::{OAuthTokenResponse, StalwartOAuth};
 
 use crate::config::{AuthMethod, Profile};
 
@@ -15,7 +15,7 @@ pub enum AuthError {
     #[error("JMAP client error: {0}")]
     Client(#[from] jmap_base_client::ClientError),
     #[error("OAuth error: {0}")]
-    OAuth(#[from] stalwart_rs::oauth::OAuthError),
+    OAuth(#[from] herald_jmap_stalwart::oauth::OAuthError),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("config error: {0}")]

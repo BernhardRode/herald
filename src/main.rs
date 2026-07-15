@@ -70,9 +70,9 @@ async fn main() {
 
     // Initialize tracing
     let filter = if cli.verbose {
-        EnvFilter::new("herald=debug,stalwart_rs=debug,jmap_base_client=debug")
+        EnvFilter::new("herald=debug,herald_jmap_stalwart=debug,jmap_base_client=debug")
     } else {
-        EnvFilter::new("herald=info,stalwart_rs=warn")
+        EnvFilter::new("herald=info,herald_jmap_stalwart=warn")
     };
     tracing_subscriber::fmt()
         .with_env_filter(filter)
