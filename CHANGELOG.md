@@ -1,4 +1,23 @@
+## [0.4.0] - 2026-07-15
+
+### 🚀 Features
+
+- Add calendar/contacts/mail write commands
+
+### 🐛 Bug Fixes
+
+- *(calendar)* Default to account calendar; publish with --no-verify
 ## [0.3.4] - 2026-07-15
+
+### 🚜 Refactor
+
+- Rename stalwart-rs crate to herald-jmap-stalwart
+
+### ⚙️ Miscellaneous Tasks
+
+- Cut redundant builds and pipeline overlap
+- Release v0.3.4
+## [0.3.3] - 2026-07-15
 
 ### 🐛 Bug Fixes
 
