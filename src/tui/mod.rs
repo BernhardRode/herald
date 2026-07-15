@@ -166,19 +166,18 @@ fn set_cursor_shape(mode: KeyMode) {
 fn input_reader(tx: UnboundedSender<Message>) {
     loop {
         match crossterm::event::poll(Duration::from_millis(100)) {
-            Ok(true) => match crossterm::event::read() {
-                Ok(crossterm::event::Event::Key(key)) => {
-                    if tx.send(Message::Event(Event::Key(key))).is_err() {
+            Ok(true) => {
+                let msg = match crossterm::event::read() {
+                    Ok(crossterm::event::Event::Key(key)) => Some(Event::Key(key)),
+                    Ok(crossterm::event::Event::Resize(..)) => Some(Event::Resized),
+                    _ => None,
+                };
+                if let Some(event) = msg {
+                    if tx.send(Message::Event(event)).is_err() {
                         return;
                     }
                 }
-                Ok(crossterm::event::Event::Resize(..)) => {
-                    if tx.send(Message::Event(Event::Resized)).is_err() {
-                        return;
-                    }
-                }
-                _ => {}
-            },
+            }
             Ok(false) => {
                 if tx.is_closed() {
                     return;
