@@ -155,9 +155,12 @@ pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapRe
             json!({ "loc1": { "@type": "Location", "name": loc } }),
         );
     }
-    if let Some(cal) = ev.calendar_id.map(str::trim).filter(|s| !s.is_empty()) {
-        event.insert("calendarIds".into(), json!({ cal: true }));
-    }
+    // An event must belong to at least one calendar; fall back to the default.
+    let calendar_id = match ev.calendar_id.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(cal) => cal.to_string(),
+        None => default_calendar_id(client, &session, account_id).await?,
+    };
+    event.insert("calendarIds".into(), json!({ calendar_id: true }));
 
     // Scheduling: with attendees, build participants and let the server send
     // iMIP invites by clearing the draft flag.
@@ -252,6 +255,53 @@ pub async fn cancel_event(client: &JmapClient, event_id: &str) -> JmapResult<()>
     );
     let resp = client.call(session.api_url.as_str(), &request).await?;
     check_set_response(&resp, "CalendarEvent/set", "notUpdated")
+}
+
+/// Fetch the account's default calendar id via a raw `Calendar/get` (the typed
+/// client currently fails to deserialize some server calendar objects, so we
+/// read the id straight from the JSON).
+async fn default_calendar_id(
+    client: &JmapClient,
+    session: &jmap_base_client::Session,
+    account_id: &str,
+) -> JmapResult<String> {
+    let request = jmap_types::JmapRequest::new(
+        vec![
+            "urn:ietf:params:jmap:core".to_string(),
+            "urn:ietf:params:jmap:calendars".to_string(),
+        ],
+        vec![(
+            "Calendar/get".to_string(),
+            json!({ "accountId": account_id }),
+            "cal_get1".to_string(),
+        )],
+        None,
+    );
+    let resp = client.call(session.api_url.as_str(), &request).await?;
+    for (name, result, _) in &resp.method_responses {
+        if name == "error" {
+            let error_type = result["type"].as_str().unwrap_or("unknown");
+            let description = result["description"].as_str().unwrap_or("");
+            return Err(format!("Calendar/get error: {error_type} — {description}").into());
+        }
+        if name == "Calendar/get" {
+            if let Some(list) = result["list"].as_array() {
+                // Prefer a default calendar, then any writable one, then the first.
+                let pick = list
+                    .iter()
+                    .find(|c| c["isDefault"].as_bool() == Some(true))
+                    .or_else(|| {
+                        list.iter()
+                            .find(|c| c["myRights"]["mayAddItems"].as_bool() == Some(true))
+                    })
+                    .or_else(|| list.first());
+                if let Some(id) = pick.and_then(|c| c["id"].as_str()) {
+                    return Ok(id.to_string());
+                }
+            }
+        }
+    }
+    Err("no calendar found on this account; pass --calendar <id>".into())
 }
 
 /// Derive an organizer address from the account's primary mail identity.
