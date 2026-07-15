@@ -1,4 +1,4 @@
-## [0.3.3] - 2026-07-15
+## [0.3.4] - 2026-07-15
 
 ### 🐛 Bug Fixes
 
@@ -9,6 +9,10 @@
 ### 🎨 Styling
 
 - Apply cargo fmt
+
+### ⚙️ Miscellaneous Tasks
+
+- Release v0.3.3
 ## [0.3.2] - 2026-07-15
 
 ### ⚙️ Miscellaneous Tasks
