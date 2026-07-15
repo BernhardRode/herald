@@ -306,6 +306,8 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f # stable
+        with:
+          toolchain: stable
       - name: Publish stalwart-rs
         run: cargo publish -p stalwart-rs --allow-dirty || true
         env:
