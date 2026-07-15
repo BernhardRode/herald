@@ -1,4 +1,52 @@
-## [0.3.0] - 2026-07-12
+## [0.3.1] - 2026-07-15
+
+### 🐛 Bug Fixes
+
+- Update actions/upload-artifact to v4
+- Correct taiki-e/install-action SHA for v2.49.5
+- Pin rust-toolchain to stable explicitly
+## [0.3.0] - 2026-07-13
+
+### 🚀 Features
+
+- *(herald)* Add ratatui TUI with television-style fuzzy search
+- *(herald)* Embed example configs at compile time
+- *(herald)* Support path-based folder mappings in config
+- *(herald)* Apply folder config to all mail actions including send
+- *(herald)* Add 'mail move' and 'mail folder-delete' CLI commands
+- *(herald)* Restructure mail screen layout and navigation
+- *(herald)* Show search results as overlay panel on left column
+- *(herald)* Cooldown-based deep search across folders
+- *(herald)* Open folder with right arrow (l) from folder view
+- Implement ratatui for TUI and add JMAP push support
+
+### 🐛 Bug Fixes
+
+- *(herald)* Cursor position uses unicode display width
+- *(herald)* Folder resolution uses defaults → role → config override
+- *(herald)* Folder view shows resolved action targets from config
+- *(herald)* Style 'any key' in quit dialog with yellow/orange color
+- *(herald)* Hide cursor in normal mode, show blinking bar in edit/search
+- *(herald)* Resolve borrow checker issue in contacts screen render
+- *(herald)* Layout 1/3 left, 2/3 right; immediate search tick
+- *(herald)* Correct mail focus navigation chain
+
+### 🚜 Refactor
+
+- *(herald)* Split TUI into modular components
+- *(herald)* Restructure source into focused modules
+- *(stalwart-rs)* Split oauth.rs into submodules
+
+### 📚 Documentation
+
+- *(herald)* Add documentation and packaging scripts
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Update workflows and add AUR publish
+- Cleanup
+- Release v0.3.0
+## [0.2.0] - 2026-07-12
 
 ### 🚀 Features
 
