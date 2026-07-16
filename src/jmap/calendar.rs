@@ -173,21 +173,29 @@ pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapRe
         .filter(|a| !a.is_empty())
         .collect();
     if !attendees.is_empty() {
-        let organizer = match ev.organizer.map(str::trim).filter(|s| !s.is_empty()) {
-            Some(o) => o.to_string(),
-            None => default_identity_email(client, &session).await?,
-        };
+        let (organizer, organizer_name) =
+            match ev.organizer.map(str::trim).filter(|s| !s.is_empty()) {
+                Some(o) => (o.to_string(), String::new()),
+                None => default_identity(client, &session).await?,
+            };
 
+        // Participant shape mirrors Stalwart's own webmail client: the
+        // scheduling address is `calendarAddress` (RFC 8984 `sendTo` is retired
+        // in jscalendarbis and ignored by calcard), and `scheduleAgent: server`
+        // tells the server to send the iMIP messages.
         let mut participants = serde_json::Map::new();
         participants.insert(
             "owner".into(),
             json!({
                 "@type": "Participant",
+                "name": organizer_name,
+                "email": organizer,
                 "calendarAddress": format!("mailto:{organizer}"),
-                "sendTo": { "imip": format!("mailto:{organizer}") },
                 "roles": { "owner": true, "attendee": true },
                 "participationStatus": "accepted",
+                "scheduleAgent": "server",
                 "expectReply": false,
+                "kind": "individual",
             }),
         );
         for (i, addr) in attendees.iter().enumerate() {
@@ -195,19 +203,20 @@ pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapRe
                 format!("a{i}"),
                 json!({
                     "@type": "Participant",
+                    "email": addr,
                     "calendarAddress": format!("mailto:{addr}"),
-                    "sendTo": { "imip": format!("mailto:{addr}") },
                     "roles": { "attendee": true },
                     "participationStatus": "needs-action",
+                    "scheduleAgent": "server",
                     "expectReply": true,
+                    "kind": "individual",
                 }),
             );
         }
         event.insert("participants".into(), json!(participants));
-        event.insert(
-            "replyTo".into(),
-            json!({ "imip": format!("mailto:{organizer}") }),
-        );
+        // Stalwart/calcard derives the iCalendar ORGANIZER solely from
+        // organizerCalendarAddress; without it no ORGANIZER is emitted and iTIP
+        // scheduling is silently skipped, so no invitations are sent.
         event.insert(
             "organizerCalendarAddress".into(),
             json!(format!("mailto:{organizer}")),
@@ -314,17 +323,17 @@ async fn default_calendar_id(
     Err("no calendar found on this account; pass --calendar <id>".into())
 }
 
-/// Derive an organizer address from the account's primary mail identity.
-async fn default_identity_email(
+/// Derive an organizer (email, name) from the account's primary mail identity.
+async fn default_identity(
     client: &JmapClient,
     session: &jmap_base_client::Session,
-) -> JmapResult<String> {
+) -> JmapResult<(String, String)> {
     let sc = client.with_mail_session(session.clone());
     let identities = sc.identity_get(None, None).await?;
     identities
         .list
         .first()
-        .map(|id| id.email.clone())
+        .map(|id| (id.email.clone(), id.name.clone()))
         .ok_or_else(|| "no mail identity found to use as organizer; pass --organizer".into())
 }
 
