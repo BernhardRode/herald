@@ -1,3 +1,9 @@
+## [0.4.1] - 2026-07-16
+
+### 🐛 Bug Fixes
+
+- *(calendar)* Make event invites actually work on Stalwart
+- *(calendar)* Match Stalwart webmail participant shape so invites send
 ## [0.4.0] - 2026-07-15
 
 ### 🚀 Features
@@ -7,6 +13,10 @@
 ### 🐛 Bug Fixes
 
 - *(calendar)* Default to account calendar; publish with --no-verify
+
+### ⚙️ Miscellaneous Tasks
+
+- Release v0.4.0
 ## [0.3.4] - 2026-07-15
 
 ### 🚜 Refactor
