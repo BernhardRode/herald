@@ -92,9 +92,11 @@ pub async fn create_event(
 
 /// A calendar event to create, with optional scheduling (invite) fields.
 ///
-/// When `attendees` is non-empty the event is created with `isDraft: false`
-/// and a `participants`/`replyTo` block, which makes the server send iMIP
-/// scheduling invitations to each attendee.
+/// When `attendees` is non-empty the event is created with a `participants`
+/// block (each participant carries a `calendarAddress`, which is the field
+/// Stalwart/calcard actually uses — `sendTo` alone is ignored and the
+/// participant would be dropped) plus `isDraft: false`, and the request sets
+/// `sendSchedulingMessages: true` so the server sends iMIP invitations.
 pub struct NewEvent<'a> {
     pub title: &'a str,
     /// Local start time, e.g. `2026-07-16T08:30:00`. Empty defaults to now.
@@ -181,7 +183,7 @@ pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapRe
             "owner".into(),
             json!({
                 "@type": "Participant",
-                "email": organizer,
+                "calendarAddress": format!("mailto:{organizer}"),
                 "sendTo": { "imip": format!("mailto:{organizer}") },
                 "roles": { "owner": true, "attendee": true },
                 "participationStatus": "accepted",
@@ -193,7 +195,7 @@ pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapRe
                 format!("a{i}"),
                 json!({
                     "@type": "Participant",
-                    "email": addr,
+                    "calendarAddress": format!("mailto:{addr}"),
                     "sendTo": { "imip": format!("mailto:{addr}") },
                     "roles": { "attendee": true },
                     "participationStatus": "needs-action",
@@ -206,13 +208,21 @@ pub async fn create_event_full(client: &JmapClient, ev: &NewEvent<'_>) -> JmapRe
             "replyTo".into(),
             json!({ "imip": format!("mailto:{organizer}") }),
         );
+        event.insert(
+            "organizerCalendarAddress".into(),
+            json!(format!("mailto:{organizer}")),
+        );
         event.insert("isDraft".into(), json!(false));
     }
 
-    let request_args = json!({
+    let mut request_args = json!({
         "accountId": account_id,
         "create": { "new1": event }
     });
+    if !attendees.is_empty() {
+        // Stalwart only generates iMIP invitations when this argument is set.
+        request_args["sendSchedulingMessages"] = json!(true);
+    }
     let request = jmap_types::JmapRequest::new(
         vec![
             "urn:ietf:params:jmap:core".to_string(),
