@@ -24,7 +24,7 @@ jobs:
           token: ${{ secrets.HERMES_TOKEN }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f # stable
+        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # stable
         with:
           toolchain: stable
 
